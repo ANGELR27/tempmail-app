@@ -50,6 +50,35 @@ class MailTMService {
     }
   }
 
+  // Re-autenticar cuenta (cuando el token expira)
+  async reAuthenticate(email) {
+    try {
+      const account = this.accounts.get(email);
+      if (!account || !account.password) {
+        throw new Error('No se puede re-autenticar: cuenta o contraseña no disponible');
+      }
+      
+      console.log(`🔄 Re-autenticando cuenta: ${email}`);
+      
+      // Obtener nuevo token
+      const tokenRes = await axios.post(`${MAILTM_API}/token`, {
+        address: email,
+        password: account.password
+      });
+      
+      // Actualizar token
+      account.token = tokenRes.data.token;
+      this.accounts.set(email, account);
+      
+      console.log(`✅ Token renovado para: ${email}`);
+      
+      return account;
+    } catch (error) {
+      console.error('Error re-autenticando:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
   // Obtener mensajes de una cuenta
   async getMessages(email) {
     try {
@@ -58,13 +87,31 @@ class MailTMService {
         throw new Error('Cuenta no encontrada');
       }
       
-      const response = await axios.get(`${MAILTM_API}/messages`, {
-        headers: {
-          'Authorization': `Bearer ${account.token}`
+      try {
+        const response = await axios.get(`${MAILTM_API}/messages`, {
+          headers: {
+            'Authorization': `Bearer ${account.token}`
+          }
+        });
+        
+        return response.data['hydra:member'] || [];
+      } catch (error) {
+        // Si el token expiró (401), intentar re-autenticar
+        if (error.response?.status === 401) {
+          console.log(`⚠️ Token expirado para ${email}, re-autenticando...`);
+          await this.reAuthenticate(email);
+          
+          // Reintentar con nuevo token
+          const retryResponse = await axios.get(`${MAILTM_API}/messages`, {
+            headers: {
+              'Authorization': `Bearer ${this.accounts.get(email).token}`
+            }
+          });
+          
+          return retryResponse.data['hydra:member'] || [];
         }
-      });
-      
-      return response.data['hydra:member'] || [];
+        throw error;
+      }
     } catch (error) {
       console.error('Error obteniendo mensajes:', error.response?.data || error.message);
       return [];
@@ -79,13 +126,29 @@ class MailTMService {
         throw new Error('Cuenta no encontrada');
       }
       
-      const response = await axios.get(`${MAILTM_API}/messages/${messageId}`, {
-        headers: {
-          'Authorization': `Bearer ${account.token}`
+      try {
+        const response = await axios.get(`${MAILTM_API}/messages/${messageId}`, {
+          headers: {
+            'Authorization': `Bearer ${account.token}`
+          }
+        });
+        
+        return response.data;
+      } catch (error) {
+        // Re-autenticar si el token expiró
+        if (error.response?.status === 401) {
+          await this.reAuthenticate(email);
+          
+          const retryResponse = await axios.get(`${MAILTM_API}/messages/${messageId}`, {
+            headers: {
+              'Authorization': `Bearer ${this.accounts.get(email).token}`
+            }
+          });
+          
+          return retryResponse.data;
         }
-      });
-      
-      return response.data;
+        throw error;
+      }
     } catch (error) {
       console.error('Error obteniendo mensaje:', error.response?.data || error.message);
       throw error;
@@ -100,13 +163,29 @@ class MailTMService {
         throw new Error('Cuenta no encontrada');
       }
       
-      await axios.delete(`${MAILTM_API}/messages/${messageId}`, {
-        headers: {
-          'Authorization': `Bearer ${account.token}`
+      try {
+        await axios.delete(`${MAILTM_API}/messages/${messageId}`, {
+          headers: {
+            'Authorization': `Bearer ${account.token}`
+          }
+        });
+        
+        return true;
+      } catch (error) {
+        // Re-autenticar si el token expiró
+        if (error.response?.status === 401) {
+          await this.reAuthenticate(email);
+          
+          await axios.delete(`${MAILTM_API}/messages/${messageId}`, {
+            headers: {
+              'Authorization': `Bearer ${this.accounts.get(email).token}`
+            }
+          });
+          
+          return true;
         }
-      });
-      
-      return true;
+        throw error;
+      }
     } catch (error) {
       console.error('Error eliminando mensaje:', error.response?.data || error.message);
       throw error;

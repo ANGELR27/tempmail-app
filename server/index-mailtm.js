@@ -138,10 +138,18 @@ app.get('/api/emails/:address', async (req, res) => {
     // Restaurar en memoria si vino de Redis
     if (!mailTM.getAccount(address)) {
       mailTM.setAccount(address, account);
+      console.log(`🔄 Cuenta restaurada en memoria desde Redis: ${address}`);
     }
     
-    // Obtener mensajes de Mail.tm
+    // Obtener mensajes de Mail.tm (con re-autenticación automática si es necesario)
     const messages = await mailTM.getMessages(address);
+    
+    // Actualizar token en Redis si cambió (después de re-autenticación)
+    const updatedAccount = mailTM.getAccount(address);
+    if (updatedAccount && updatedAccount.token !== account.token) {
+      await redisClient.set(`account:${address}`, updatedAccount);
+      console.log(`💾 Token actualizado en Redis para: ${address}`);
+    }
     
     // Transformar formato
     const emails = messages.map(msg => ({
