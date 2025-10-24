@@ -544,40 +544,101 @@ function App() {
                   </button>
                 </div>
 
-                <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                   {emails.length === 0 ? (
                     <div className="text-center py-12 text-slate-400">
-                      <Mail className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p>No hay mensajes</p>
-                      <p className="text-sm mt-2">
+                      <div className="relative inline-block mb-4">
+                        <Mail className="w-16 h-16 mx-auto opacity-20" />
+                        <div className="absolute inset-0 animate-ping opacity-10">
+                          <Mail className="w-16 h-16" />
+                        </div>
+                      </div>
+                      <p className="font-semibold text-lg mb-2">No hay mensajes</p>
+                      <p className="text-sm text-slate-500">
                         Los emails llegarán aquí automáticamente
                       </p>
                     </div>
                   ) : (
-                    emails.map((email) => (
-                      <button
-                        key={email.id}
-                        onClick={() => setSelectedEmail(email)}
-                        className={`w-full text-left p-3 rounded-lg transition-all ${
-                          selectedEmail?.id === email.id
-                            ? 'bg-primary-500/20 border-primary-500'
-                            : 'bg-slate-700/30 hover:bg-slate-700/50'
-                        } border border-transparent`}
-                      >
-                        <div className="font-medium text-sm mb-1 truncate">
-                          {email.from}
-                        </div>
-                        <div className="text-white text-sm mb-1 truncate">
-                          {email.subject}
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          {formatDistanceToNow(new Date(email.date), {
-                            addSuffix: true,
-                            locale: es,
-                          })}
-                        </div>
-                      </button>
-                    ))
+                    emails.map((email, index) => {
+                      const isNew = index < 3; // Simular nuevos
+                      const hasCode = email.extractedCode;
+                      const initials = email.from.substring(0, 2).toUpperCase();
+                      
+                      return (
+                        <button
+                          key={email.id}
+                          onClick={() => setSelectedEmail(email)}
+                          className={`group w-full text-left p-4 rounded-xl transition-all duration-200 ${
+                            selectedEmail?.id === email.id
+                              ? 'bg-gradient-to-r from-primary-500/20 to-primary-600/10 border-primary-500 shadow-lg shadow-primary-500/20'
+                              : 'bg-slate-800/40 hover:bg-slate-700/50 border-slate-700/50'
+                          } border relative overflow-hidden`}
+                        >
+                          {/* Indicador de nuevo */}
+                          {isNew && selectedEmail?.id !== email.id && (
+                            <div className="absolute top-2 right-2">
+                              <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary-500"></span>
+                              </span>
+                            </div>
+                          )}
+                          
+                          <div className="flex items-start gap-3">
+                            {/* Avatar */}
+                            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${
+                              selectedEmail?.id === email.id
+                                ? 'bg-primary-500 text-white'
+                                : 'bg-slate-700 text-slate-300 group-hover:bg-slate-600'
+                            } transition-colors`}>
+                              {initials}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                              {/* Remitente */}
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-semibold text-sm truncate">
+                                  {email.from.split('@')[0]}
+                                </span>
+                                {hasCode && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-500/20 text-primary-400 border border-primary-500/30">
+                                    Código
+                                  </span>
+                                )}
+                              </div>
+                              
+                              {/* Asunto */}
+                              <div className={`text-sm mb-1 truncate ${
+                                selectedEmail?.id === email.id ? 'text-white font-medium' : 'text-slate-200'
+                              }`}>
+                                {email.subject}
+                              </div>
+                              
+                              {/* Preview del contenido */}
+                              <div className="text-xs text-slate-400 truncate mb-2">
+                                {email.extractedCode || email.intro || email.text?.substring(0, 60) || 'Sin contenido'}
+                              </div>
+                              
+                              {/* Fecha */}
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-500">
+                                  {formatDistanceToNow(new Date(email.date), {
+                                    addSuffix: true,
+                                    locale: es,
+                                  })}
+                                </span>
+                                {email.hasAttachments && (
+                                  <span className="text-xs text-slate-500 flex items-center gap-1">
+                                    <ExternalLink className="w-3 h-3" />
+                                    Adjunto
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -585,78 +646,156 @@ function App() {
 
             {/* Visor de email */}
             <div className="lg:col-span-2">
-              <div className="card p-6">
+              <div className="card p-0 overflow-hidden">
                 {!selectedEmail ? (
-                  <div className="text-center py-20 text-slate-400">
-                    <Mail className="w-16 h-16 mx-auto mb-4 opacity-30" />
-                    <p className="text-lg">Selecciona un mensaje para verlo</p>
+                  <div className="text-center py-20 text-slate-400 p-6">
+                    <div className="relative inline-block mb-4">
+                      <Mail className="w-20 h-20 mx-auto opacity-20" />
+                      <div className="absolute inset-0 animate-pulse opacity-10">
+                        <Mail className="w-20 h-20" />
+                      </div>
+                    </div>
+                    <p className="text-xl font-semibold mb-2">Selecciona un mensaje</p>
+                    <p className="text-sm text-slate-500">Haz clic en un email para ver su contenido</p>
                   </div>
                 ) : (
                   <div>
-                    <div className="flex items-start justify-between mb-6 pb-4 border-b border-slate-700">
-                      <div className="flex-1">
-                        <h2 className="text-2xl font-semibold mb-3">
-                          {selectedEmail.subject}
-                        </h2>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-400">De:</span>
-                            <span className="font-mono">{selectedEmail.from}</span>
+                    {/* Header del email */}
+                    <div className="bg-gradient-to-r from-slate-800/50 to-slate-800/30 border-b border-slate-700/50 p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-start gap-4 flex-1">
+                          {/* Avatar grande */}
+                          <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary-500 flex items-center justify-center font-bold text-white">
+                            {selectedEmail.from.substring(0, 2).toUpperCase()}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-400">Para:</span>
-                            <span className="font-mono">{selectedEmail.to}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-400">Fecha:</span>
-                            <span>
-                              {new Date(selectedEmail.date).toLocaleString('es-ES')}
-                            </span>
+                          
+                          <div className="flex-1">
+                            <h2 className="text-2xl font-bold mb-3 text-white">
+                              {selectedEmail.subject}
+                            </h2>
+                            
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-slate-400 font-medium min-w-[60px]">De:</span>
+                                <span className="font-mono text-slate-200 bg-slate-900/50 px-3 py-1 rounded-md">
+                                  {selectedEmail.from}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-slate-400 font-medium min-w-[60px]">Para:</span>
+                                <span className="font-mono text-slate-200 bg-slate-900/50 px-3 py-1 rounded-md">
+                                  {selectedEmail.to}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-slate-400 font-medium min-w-[60px]">Fecha:</span>
+                                <span className="text-slate-300">
+                                  {new Date(selectedEmail.date).toLocaleString('es-ES', {
+                                    dateStyle: 'full',
+                                    timeStyle: 'short'
+                                  })}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
+                        
+                        <button
+                          onClick={() => deleteEmail(selectedEmail.id)}
+                          className="btn-secondary inline-flex items-center gap-2 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50 transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Eliminar
+                        </button>
                       </div>
-                      <button
-                        onClick={() => deleteEmail(selectedEmail.id)}
-                        className="btn-secondary inline-flex items-center gap-2"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Eliminar
-                      </button>
-                    </div>
-
-                    <div className="prose prose-invert max-w-none">
-                      {selectedEmail.html ? (
-                        <iframe
-                          srcDoc={selectedEmail.html}
-                          className="w-full min-h-[400px] bg-white rounded-lg"
-                          sandbox="allow-same-origin"
-                        />
-                      ) : (
-                        <pre className="whitespace-pre-wrap text-slate-300 bg-slate-900/50 p-4 rounded-lg">
-                          {selectedEmail.text}
-                        </pre>
+                      
+                      {/* Badge de información */}
+                      {selectedEmail.serviceInfo && (
+                        <div className="flex items-center gap-2 mt-4">
+                          <span className="text-xs px-3 py-1.5 rounded-full bg-primary-500/20 text-primary-400 border border-primary-500/30 font-medium">
+                            {selectedEmail.serviceInfo.name || 'Servicio detectado'}
+                          </span>
+                        </div>
                       )}
                     </div>
 
-                    {selectedEmail.attachments?.length > 0 && (
-                      <div className="mt-6 pt-4 border-t border-slate-700">
-                        <h3 className="font-semibold mb-3">Archivos adjuntos</h3>
-                        <div className="space-y-2">
-                          {selectedEmail.attachments.map((att, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-center gap-3 bg-slate-700/30 p-3 rounded-lg"
-                            >
-                              <ExternalLink className="w-5 h-5 text-primary-400" />
-                              <span className="flex-1">{att.filename}</span>
-                              <span className="text-sm text-slate-400">
-                                {(att.size / 1024).toFixed(2)} KB
-                              </span>
+                    {/* Código extraído destacado */}
+                    {selectedEmail.extractedCode && (
+                      <div className="bg-gradient-to-br from-primary-500/10 to-primary-600/5 border-b border-primary-500/20 p-6">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-2 h-2 rounded-full bg-primary-500 animate-pulse"></div>
+                          <h3 className="font-bold text-primary-400 text-sm uppercase tracking-wide">Código de Verificación</h3>
+                        </div>
+                        <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl p-6 border border-primary-500/20">
+                          <div className="text-center">
+                            <div className="text-5xl font-black tracking-widest text-white mb-2 font-mono select-all">
+                              {selectedEmail.extractedCode}
                             </div>
-                          ))}
+                            <p className="text-xs text-slate-400 mt-2">Haz clic para copiar</p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(selectedEmail.extractedCode);
+                              alert('✅ Código copiado al portapapeles');
+                            }}
+                            className="w-full mt-4 btn-primary inline-flex items-center justify-center gap-2 text-sm"
+                          >
+                            <Copy className="w-4 h-4" />
+                            Copiar Código
+                          </button>
                         </div>
                       </div>
                     )}
+
+                    {/* Contenido del email */}
+                    <div className="p-6">
+                      <div className="prose prose-invert prose-lg max-w-none">
+                        {selectedEmail.html ? (
+                          <div className="rounded-xl overflow-hidden border border-slate-700">
+                            <iframe
+                              srcDoc={selectedEmail.html}
+                              className="w-full min-h-[500px] bg-white"
+                              sandbox="allow-same-origin"
+                              title="Email content"
+                            />
+                          </div>
+                        ) : (
+                          <div className="bg-slate-900/30 backdrop-blur-sm rounded-xl p-6 border border-slate-700/50">
+                            <pre className="whitespace-pre-wrap text-slate-200 font-sans leading-relaxed">
+                              {selectedEmail.text}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Archivos adjuntos */}
+                      {selectedEmail.attachments?.length > 0 && (
+                        <div className="mt-8 pt-6 border-t border-slate-700/50">
+                          <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                            <ExternalLink className="w-5 h-5 text-primary-400" />
+                            Archivos Adjuntos ({selectedEmail.attachments.length})
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {selectedEmail.attachments.map((att, idx) => (
+                              <div
+                                key={idx}
+                                className="group flex items-center gap-3 bg-gradient-to-r from-slate-800/50 to-slate-800/30 hover:from-slate-700/50 hover:to-slate-700/30 p-4 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-all cursor-pointer"
+                              >
+                                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary-500/20 flex items-center justify-center">
+                                  <ExternalLink className="w-5 h-5 text-primary-400" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm truncate">{att.filename}</div>
+                                  <div className="text-xs text-slate-400 mt-0.5">
+                                    {(att.size / 1024).toFixed(2)} KB
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
