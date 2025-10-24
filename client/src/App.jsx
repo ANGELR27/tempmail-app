@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Mail, RefreshCw, Copy, Check, Trash2, Clock, Inbox, ExternalLink } from 'lucide-react';
+import { Mail, RefreshCw, Copy, Check, Trash2, Clock, Inbox, ExternalLink, History, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -14,6 +14,38 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [ws, setWs] = useState(null);
   const [serverInfo, setServerInfo] = useState(null);
+  const [emailHistory, setEmailHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Cargar historial de emails desde localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('emailHistory');
+    if (saved) {
+      try {
+        setEmailHistory(JSON.parse(saved));
+      } catch (e) {
+        console.error('Error cargando historial:', e);
+      }
+    }
+  }, []);
+
+  // Guardar email en historial
+  const saveToHistory = (email, expiresAt) => {
+    const newHistory = [
+      { email, createdAt: Date.now(), expiresAt },
+      ...emailHistory.filter(item => item.email !== email)
+    ].slice(0, 20); // Mantener solo los últimos 20
+    
+    setEmailHistory(newHistory);
+    localStorage.setItem('emailHistory', JSON.stringify(newHistory));
+  };
+
+  // Eliminar del historial
+  const removeFromHistory = (email) => {
+    const newHistory = emailHistory.filter(item => item.email !== email);
+    setEmailHistory(newHistory);
+    localStorage.setItem('emailHistory', JSON.stringify(newHistory));
+  };
 
   // Obtener información del servidor
   useEffect(() => {
@@ -85,12 +117,24 @@ function App() {
       setCurrentEmail(data.email);
       setEmails([]);
       setSelectedEmail(null);
+      
+      // Guardar en historial
+      const expiresAt = Date.now() + data.expiresIn;
+      saveToHistory(data.email, expiresAt);
     } catch (error) {
       console.error('Error generando email:', error);
       alert('Error al generar email');
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Cambiar a un email del historial
+  const switchToEmail = (email) => {
+    setCurrentEmail(email);
+    setEmails([]);
+    setSelectedEmail(null);
+    setShowHistory(false);
   };
 
   const fetchEmails = useCallback(async () => {
@@ -136,10 +180,76 @@ function App() {
   }, [currentEmail, fetchEmails]);
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
+    <div className="min-h-screen p-4 md:p-8 relative">
+      {/* Sidebar de Historial */}
+      {showHistory && (
+        <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowHistory(false)}>
+          <div 
+            className="fixed right-0 top-0 bottom-0 w-full md:w-96 bg-slate-900 shadow-2xl z-50 overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <History className="w-6 h-6 text-primary-400" />
+                  Historial de Emails
+                </h2>
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {emailHistory.length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <History className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No hay emails en el historial</p>
+                  <p className="text-sm mt-2">Los emails generados aparecerán aquí</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {emailHistory.map((item) => (
+                    <div
+                      key={item.email}
+                      className={`p-4 rounded-lg border transition-all ${
+                        currentEmail === item.email
+                          ? 'bg-primary-500/20 border-primary-500'
+                          : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <button
+                          onClick={() => switchToEmail(item.email)}
+                          className="flex-1 text-left"
+                        >
+                          <div className="font-mono text-sm break-all mb-2">
+                            {item.email}
+                          </div>
+                          <div className="text-xs text-slate-400">
+                            Creado {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: es })}
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => removeFromHistory(item.email)}
+                          className="p-2 hover:bg-red-500/20 rounded-lg transition-colors text-red-400"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 relative">
           <div className="flex items-center justify-center gap-3 mb-4">
             <div className="bg-primary-500 p-3 rounded-2xl">
               <Mail className="w-8 h-8" />
@@ -147,6 +257,17 @@ function App() {
             <h1 className="text-4xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
               TempMail
             </h1>
+            
+            {/* Botón de Historial */}
+            {emailHistory.length > 0 && (
+              <button
+                onClick={() => setShowHistory(true)}
+                className="absolute right-4 top-0 btn-secondary inline-flex items-center gap-2"
+              >
+                <History className="w-4 h-4" />
+                Historial ({emailHistory.length})
+              </button>
+            )}
           </div>
           <p className="text-slate-400 text-lg">
             Correo electrónico temporal - Protege tu privacidad

@@ -5,7 +5,7 @@
     "buildCommand": "npm install --production && cd client && npm install && npm run build && cd .."
   },
   "deploy": {
-    "startCommand": "NODE_ENV=production node server/index.js",
+    "startCommand": "NODE_ENV=production node server/index-mailtm.js",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
