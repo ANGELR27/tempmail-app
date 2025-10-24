@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Mail, RefreshCw, Copy, Check, Trash2, Clock, Inbox, ExternalLink, History, X } from 'lucide-react';
+import { Mail, RefreshCw, Copy, Check, Trash2, Clock, Inbox, ExternalLink, History, X, BarChart3 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { extractMainCode, detectServiceType } from './utils/codeExtractor';
+import { updateStats } from './utils/stats';
+import { StatsPanel } from './components/StatsPanel';
 
 const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3001/api';
 const WS_URL = 'ws://localhost:3001'; // WebSocket solo funciona en desarrollo local
@@ -16,6 +19,8 @@ function App() {
   const [serverInfo, setServerInfo] = useState(null);
   const [emailHistory, setEmailHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [emailCreatedTime, setEmailCreatedTime] = useState(null);
 
   // Cargar historial de emails desde localStorage
   useEffect(() => {
@@ -118,6 +123,9 @@ function App() {
       setEmails([]);
       setSelectedEmail(null);
       
+      // Guardar tiempo de creación
+      setEmailCreatedTime(Date.now());
+      
       // Guardar en historial
       const expiresAt = Date.now() + data.expiresIn;
       saveToHistory(data.email, expiresAt);
@@ -144,7 +152,66 @@ function App() {
       const response = await fetch(`${API_URL}/emails/${encodeURIComponent(currentEmail)}`);
       if (response.ok) {
         const data = await response.json();
-        setEmails(data.emails);
+        
+        // Procesar emails y detectar códigos
+        const processedEmails = data.emails.map(email => {
+          const code = extractMainCode(email.text || email.intro, email.subject);
+          const serviceInfo = detectServiceType(email.from, email.subject);
+          
+          return {
+            ...email,
+            extractedCode: code,
+            serviceInfo
+          };
+        });
+        
+        // Detectar nuevos emails y actualizar estadísticas
+        const newEmails = processedEmails.filter(
+          pe => !emails.find(e => e.id === pe.id)
+        );
+        
+        if (newEmails.length > 0) {
+          newEmails.forEach(email => {
+            // Actualizar estadísticas
+            updateStats({
+              service: email.serviceInfo.service,
+              receivedTime: Date.now(),
+              emailCreatedTime: emailCreatedTime
+            });
+            
+            // Mostrar notificación mejorada
+            if (Notification.permission === 'granted') {
+              const code = email.extractedCode;
+              const title = email.serviceInfo.icon + ' ' + email.serviceInfo.service;
+              const body = code 
+                ? `Código: ${code} - ${email.subject}`
+                : email.subject;
+              
+              if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({
+                  type: 'SHOW_NOTIFICATION',
+                  payload: {
+                    title,
+                    body,
+                    icon: '/mail.svg',
+                    badge: '/mail.svg',
+                    tag: email.id,
+                    data: { code, email: currentEmail }
+                  }
+                });
+              } else {
+                new Notification(title, { body, icon: '/mail.svg' });
+              }
+              
+              // Vibrar en móvil
+              if ('vibrate' in navigator) {
+                navigator.vibrate([200, 100, 200]);
+              }
+            }
+          });
+        }
+        
+        setEmails(processedEmails);
       }
     } catch (error) {
       console.error('Error obteniendo emails:', error);
@@ -181,6 +248,11 @@ function App() {
 
   return (
     <div className="min-h-screen p-4 md:p-8 relative">
+      {/* Panel de Estadísticas */}
+      {showStats && (
+        <StatsPanel onClose={() => setShowStats(false)} />
+      )}
+
       {/* Sidebar de Historial */}
       {showHistory && (
         <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowHistory(false)}>
@@ -258,16 +330,25 @@ function App() {
               TempMail
             </h1>
             
-            {/* Botón de Historial */}
-            {emailHistory.length > 0 && (
+            {/* Botones de Historial y Estadísticas */}
+            <div className="absolute right-4 top-0 flex gap-2">
               <button
-                onClick={() => setShowHistory(true)}
-                className="absolute right-4 top-0 btn-secondary inline-flex items-center gap-2"
+                onClick={() => setShowStats(true)}
+                className="btn-secondary inline-flex items-center gap-2"
               >
-                <History className="w-4 h-4" />
-                Historial ({emailHistory.length})
+                <BarChart3 className="w-4 h-4" />
+                Estadísticas
               </button>
-            )}
+              {emailHistory.length > 0 && (
+                <button
+                  onClick={() => setShowHistory(true)}
+                  className="btn-secondary inline-flex items-center gap-2"
+                >
+                  <History className="w-4 h-4" />
+                  Historial ({emailHistory.length})
+                </button>
+              )}
+            </div>
           </div>
           <p className="text-slate-400 text-lg">
             Correo electrónico temporal - Protege tu privacidad
