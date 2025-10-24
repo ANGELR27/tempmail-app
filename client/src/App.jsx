@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale';
 import { extractMainCode, detectServiceType } from './utils/codeExtractor';
 import { updateStats } from './utils/stats';
 import { StatsPanel } from './components/StatsPanel';
+import { saveEmails, getEmails, getEmailCount, getAllEmailCounts } from './utils/emailStorage';
 
 const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3001/api';
 const WS_URL = 'ws://localhost:3001'; // WebSocket solo funciona en desarrollo local
@@ -21,6 +22,7 @@ function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [emailCreatedTime, setEmailCreatedTime] = useState(null);
+  const [emailCounts, setEmailCounts] = useState({});
 
   // Cargar historial de emails desde localStorage
   useEffect(() => {
@@ -32,6 +34,18 @@ function App() {
         console.error('Error cargando historial:', e);
       }
     }
+    
+    // Cargar contadores
+    setEmailCounts(getAllEmailCounts());
+  }, []);
+  
+  // Actualizar contadores periódicamente
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setEmailCounts(getAllEmailCounts());
+    }, 3000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Guardar email en historial
@@ -148,6 +162,12 @@ function App() {
   const fetchEmails = useCallback(async () => {
     if (!currentEmail) return;
     
+    // Primero intentar cargar desde localStorage
+    const cachedEmails = getEmails(currentEmail);
+    if (cachedEmails && cachedEmails.length > 0) {
+      setEmails(cachedEmails);
+    }
+    
     try {
       const response = await fetch(`${API_URL}/emails/${encodeURIComponent(currentEmail)}`);
       if (response.ok) {
@@ -212,11 +232,20 @@ function App() {
         }
         
         setEmails(processedEmails);
+        
+        // Guardar en localStorage
+        saveEmails(currentEmail, processedEmails);
+        
+        // Actualizar contador
+        setEmailCounts(prev => ({
+          ...prev,
+          [currentEmail]: processedEmails.length
+        }));
       }
     } catch (error) {
       console.error('Error obteniendo emails:', error);
     }
-  }, [currentEmail]);
+  }, [currentEmail, emails, emailCreatedTime]);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(currentEmail);
@@ -282,36 +311,54 @@ function App() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {emailHistory.map((item) => (
-                    <div
-                      key={item.email}
-                      className={`p-4 rounded-lg border transition-all ${
-                        currentEmail === item.email
-                          ? 'bg-primary-500/20 border-primary-500'
-                          : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <button
-                          onClick={() => switchToEmail(item.email)}
-                          className="flex-1 text-left"
-                        >
-                          <div className="font-mono text-sm break-all mb-2">
-                            {item.email}
-                          </div>
-                          <div className="text-xs text-slate-400">
-                            Creado {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: es })}
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => removeFromHistory(item.email)}
-                          className="p-2 hover:bg-red-500/20 rounded-lg transition-colors text-red-400"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                  {emailHistory.map((item) => {
+                    const messageCount = emailCounts[item.email] || 0;
+                    const hasMessages = messageCount > 0;
+                    
+                    return (
+                      <div
+                        key={item.email}
+                        className={`p-4 rounded-lg border transition-all relative ${
+                          currentEmail === item.email
+                            ? 'bg-primary-500/20 border-primary-500'
+                            : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <button
+                            onClick={() => switchToEmail(item.email)}
+                            className="flex-1 text-left"
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="font-mono text-sm break-all flex-1">
+                                {item.email}
+                              </div>
+                              {hasMessages && (
+                                <div className="flex items-center gap-1">
+                                  <span className="relative flex h-3 w-3">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-primary-500"></span>
+                                  </span>
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary-500/20 text-primary-400 font-semibold">
+                                    {messageCount} {messageCount === 1 ? 'mensaje' : 'mensajes'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              Creado {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: es })}
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => removeFromHistory(item.email)}
+                            className="p-2 hover:bg-red-500/20 rounded-lg transition-colors text-red-400"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
