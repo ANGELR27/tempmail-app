@@ -185,53 +185,56 @@ function App() {
           };
         });
         
-        // Detectar nuevos emails y actualizar estadísticas
-        const newEmails = processedEmails.filter(
-          pe => !emails.find(e => e.id === pe.id)
-        );
-        
-        if (newEmails.length > 0) {
-          newEmails.forEach(email => {
-            // Actualizar estadísticas
-            updateStats({
-              service: email.serviceInfo.service,
-              receivedTime: Date.now(),
-              emailCreatedTime: emailCreatedTime
+        // Usar función de actualización para detectar nuevos emails sin depender del estado
+        setEmails(prevEmails => {
+          // Detectar nuevos emails
+          const newEmails = processedEmails.filter(
+            pe => !prevEmails.find(e => e.id === pe.id)
+          );
+          
+          if (newEmails.length > 0) {
+            newEmails.forEach(email => {
+              // Actualizar estadísticas
+              updateStats({
+                service: email.serviceInfo?.service || 'Desconocido',
+                receivedTime: Date.now(),
+                emailCreatedTime: emailCreatedTime
+              });
+              
+              // Mostrar notificación mejorada
+              if (Notification.permission === 'granted') {
+                const code = email.extractedCode;
+                const title = (email.serviceInfo?.icon || '📧') + ' ' + (email.serviceInfo?.service || 'Nuevo mensaje');
+                const body = code 
+                  ? `Código: ${code} - ${email.subject}`
+                  : email.subject;
+                
+                if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                  navigator.serviceWorker.controller.postMessage({
+                    type: 'SHOW_NOTIFICATION',
+                    payload: {
+                      title,
+                      body,
+                      icon: '/mail.svg',
+                      badge: '/mail.svg',
+                      tag: email.id,
+                      data: { code, email: currentEmail }
+                    }
+                  });
+                } else {
+                  new Notification(title, { body, icon: '/mail.svg' });
+                }
+                
+                // Vibrar en móvil
+                if ('vibrate' in navigator) {
+                  navigator.vibrate([200, 100, 200]);
+                }
+              }
             });
-            
-            // Mostrar notificación mejorada
-            if (Notification.permission === 'granted') {
-              const code = email.extractedCode;
-              const title = email.serviceInfo.icon + ' ' + email.serviceInfo.service;
-              const body = code 
-                ? `Código: ${code} - ${email.subject}`
-                : email.subject;
-              
-              if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-                navigator.serviceWorker.controller.postMessage({
-                  type: 'SHOW_NOTIFICATION',
-                  payload: {
-                    title,
-                    body,
-                    icon: '/mail.svg',
-                    badge: '/mail.svg',
-                    tag: email.id,
-                    data: { code, email: currentEmail }
-                  }
-                });
-              } else {
-                new Notification(title, { body, icon: '/mail.svg' });
-              }
-              
-              // Vibrar en móvil
-              if ('vibrate' in navigator) {
-                navigator.vibrate([200, 100, 200]);
-              }
-            }
-          });
-        }
-        
-        setEmails(processedEmails);
+          }
+          
+          return processedEmails;
+        });
         
         // Guardar en localStorage
         saveEmails(currentEmail, processedEmails);
@@ -245,7 +248,7 @@ function App() {
     } catch (error) {
       console.error('Error obteniendo emails:', error);
     }
-  }, [currentEmail, emails, emailCreatedTime]);
+  }, [currentEmail, emailCreatedTime]);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(currentEmail);
