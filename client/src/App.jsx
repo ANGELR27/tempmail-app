@@ -5,7 +5,7 @@ import { es } from 'date-fns/locale';
 import { extractMainCode, detectServiceType } from './utils/codeExtractor';
 import { updateStats } from './utils/stats';
 import { StatsPanel } from './components/StatsPanel';
-import { saveEmails, getEmails, getEmailCount, getAllEmailCounts } from './utils/emailStorage';
+import { saveEmails, getEmails, getEmailCount, getAllEmailCounts, clearEmails } from './utils/emailStorage';
 
 const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3001/api';
 const WS_URL = 'ws://localhost:3001'; // WebSocket solo funciona en desarrollo local
@@ -281,10 +281,16 @@ function App() {
       // Eliminar del historial
       removeFromHistory(currentEmail);
       
+      // Limpiar emails del localStorage
+      clearEmails(currentEmail);
+      
       // Limpiar estado
       setCurrentEmail('');
       setEmails([]);
       setSelectedEmail(null);
+      
+      // Actualizar contadores
+      setEmailCounts(getAllEmailCounts());
       
       alert('✅ Cuenta eliminada exitosamente');
     } catch (error) {
