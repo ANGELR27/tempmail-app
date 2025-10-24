@@ -20,6 +20,19 @@ app.use(express.json());
 
 // Servir archivos estáticos del cliente (para producción)
 if (process.env.NODE_ENV === 'production') {
+  // Servir archivos de la carpeta assets con maxAge
+  app.use('/assets', express.static(path.join(__dirname, '../client/dist/assets'), {
+    maxAge: '1y',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      } else if (filePath.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      }
+    }
+  }));
+  
+  // Servir otros archivos estáticos del root
   app.use(express.static(path.join(__dirname, '../client/dist'), {
     setHeaders: (res, filePath) => {
       // Configurar MIME types correctos
@@ -31,6 +44,8 @@ if (process.env.NODE_ENV === 'production') {
         res.setHeader('Content-Type', 'text/css; charset=utf-8');
       } else if (filePath.endsWith('.json')) {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      } else if (filePath.endsWith('.svg')) {
+        res.setHeader('Content-Type', 'image/svg+xml');
       }
     }
   }));
@@ -207,9 +222,15 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Servir el frontend en producción
+// Servir el frontend en producción (DEBE IR AL FINAL)
 if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
+  // Solo enviar index.html para rutas que NO sean archivos estáticos
+  app.get('*', (req, res, next) => {
+    // Si la ruta incluye un punto (archivo estático), pasar al siguiente middleware
+    if (req.path.includes('.')) {
+      return next();
+    }
+    // Para rutas normales, enviar el index.html
     res.sendFile(path.join(__dirname, '../client/dist/index.html'));
   });
 }
