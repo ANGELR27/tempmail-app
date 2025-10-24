@@ -244,9 +244,11 @@ function App() {
           ...prev,
           [currentEmail]: processedEmails.length
         }));
+      } else {
+        console.warn('⚠️ Error al obtener emails:', response.status, response.statusText);
       }
     } catch (error) {
-      console.error('Error obteniendo emails:', error);
+      console.error('❌ Error obteniendo emails:', error);
     }
   }, [currentEmail, emailCreatedTime]);
 
