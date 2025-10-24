@@ -20,11 +20,16 @@ app.use(express.json());
 
 // Servir archivos estáticos del cliente (para producción)
 if (process.env.NODE_ENV === 'production') {
+  const distPath = path.join(__dirname, '../client/dist');
+  
+  // Log para debugging
+  console.log('📁 Sirviendo archivos estáticos desde:', distPath);
+  
   // Servir archivos de la carpeta assets con maxAge
-  app.use('/assets', express.static(path.join(__dirname, '../client/dist/assets'), {
+  app.use('/assets', express.static(path.join(distPath, 'assets'), {
     maxAge: '1y',
     setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.js')) {
+      if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
         res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
       } else if (filePath.endsWith('.css')) {
         res.setHeader('Content-Type', 'text/css; charset=utf-8');
@@ -33,12 +38,11 @@ if (process.env.NODE_ENV === 'production') {
   }));
   
   // Servir otros archivos estáticos del root
-  app.use(express.static(path.join(__dirname, '../client/dist'), {
+  app.use(express.static(distPath, {
+    index: false, // No servir index.html automáticamente
     setHeaders: (res, filePath) => {
       // Configurar MIME types correctos
-      if (filePath.endsWith('.js')) {
-        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      } else if (filePath.endsWith('.mjs')) {
+      if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
         res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
       } else if (filePath.endsWith('.css')) {
         res.setHeader('Content-Type', 'text/css; charset=utf-8');
@@ -46,6 +50,8 @@ if (process.env.NODE_ENV === 'production') {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
       } else if (filePath.endsWith('.svg')) {
         res.setHeader('Content-Type', 'image/svg+xml');
+      } else if (filePath.endsWith('.png')) {
+        res.setHeader('Content-Type', 'image/png');
       }
     }
   }));
