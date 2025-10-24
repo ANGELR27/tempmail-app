@@ -8,7 +8,8 @@ const redisClient = require('./redis-client');
 
 // Configuración
 const PORT = process.env.PORT || 3001;
-const emailLifetime = 60 * 60; // 1 hora en segundos
+// ⭐ EMAILS PERMANENTES - Sin expiración automática
+const emailLifetime = null; // null = permanente, solo se eliminan manualmente
 
 // Conectar a Redis
 redisClient.connect();
@@ -100,14 +101,15 @@ app.post('/api/generate-email', async (req, res) => {
   try {
     const accountData = await mailTM.createAccount();
     
-    // Guardar en Redis con expiración
-    await redisClient.set(`account:${accountData.email}`, accountData, emailLifetime);
+    // Guardar en Redis SIN expiración (permanente)
+    await redisClient.set(`account:${accountData.email}`, accountData); // Sin tiempo de expiración
     
     res.json({
       email: accountData.email,
-      expiresIn: emailLifetime * 1000,
+      expiresIn: null, // null = permanente
       createdAt: accountData.createdAt,
-      provider: 'mail.tm'
+      provider: 'mail.tm',
+      permanent: true // Indicar que es permanente
     });
   } catch (error) {
     console.error('Error generando email:', error);
@@ -158,7 +160,8 @@ app.get('/api/emails/:address', async (req, res) => {
     res.json({
       emails: emails.sort((a, b) => new Date(b.date) - new Date(a.date)),
       count: emails.length,
-      expiresAt: account.createdAt + (emailLifetime * 1000)
+      expiresAt: null, // null = nunca expira
+      permanent: true
     });
   } catch (error) {
     console.error('Error obteniendo emails:', error);
@@ -206,6 +209,32 @@ app.delete('/api/emails/:address/:emailId', async (req, res) => {
   } catch (error) {
     console.error('Error eliminando email:', error);
     res.status(500).json({ error: 'Error eliminando mensaje' });
+  }
+});
+
+// 🗑️ Eliminar cuenta de email (permanente - solo cuando el usuario lo decida)
+app.delete('/api/account/:address', async (req, res) => {
+  try {
+    const address = decodeURIComponent(req.params.address);
+    
+    // Eliminar de Redis
+    await redisClient.del(`account:${address}`);
+    
+    // Eliminar de memoria
+    const account = mailTM.getAccount(address);
+    if (account) {
+      // Mail.tm no tiene API para eliminar cuentas, pero podemos eliminarla de nuestro sistema
+      mailTM.accounts.delete(address);
+      console.log(`🗑️ Cuenta eliminada del sistema: ${address}`);
+    }
+    
+    res.json({ 
+      success: true,
+      message: 'Cuenta eliminada exitosamente' 
+    });
+  } catch (error) {
+    console.error('Error eliminando cuenta:', error);
+    res.status(500).json({ error: 'Error eliminando cuenta' });
   }
 });
 

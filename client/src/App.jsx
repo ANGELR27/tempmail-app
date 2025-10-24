@@ -140,8 +140,8 @@ function App() {
       // Guardar tiempo de creación
       setEmailCreatedTime(Date.now());
       
-      // Guardar en historial
-      const expiresAt = Date.now() + data.expiresIn;
+      // Guardar en historial (permanente - sin expiración)
+      const expiresAt = data.permanent ? null : (Date.now() + data.expiresIn);
       saveToHistory(data.email, expiresAt);
     } catch (error) {
       console.error('Error generando email:', error);
@@ -264,6 +264,32 @@ function App() {
       }
     } catch (error) {
       console.error('Error eliminando email:', error);
+    }
+  };
+
+  // 🗑️ Eliminar cuenta permanentemente
+  const deleteAccount = async () => {
+    if (!confirm('¿Estás seguro de eliminar esta cuenta de email permanentemente?\n\nEsta acción no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      await fetch(`${API_URL}/account/${encodeURIComponent(currentEmail)}`, {
+        method: 'DELETE',
+      });
+      
+      // Eliminar del historial
+      removeFromHistory(currentEmail);
+      
+      // Limpiar estado
+      setCurrentEmail('');
+      setEmails([]);
+      setSelectedEmail(null);
+      
+      alert('✅ Cuenta eliminada exitosamente');
+    } catch (error) {
+      console.error('Error eliminando cuenta:', error);
+      alert('❌ Error al eliminar la cuenta');
     }
   };
 
@@ -407,10 +433,10 @@ function App() {
           {!currentEmail ? (
             <div className="text-center">
               <h2 className="text-2xl font-semibold mb-4">
-                Generar dirección temporal
+                Generar dirección de email
               </h2>
               <p className="text-slate-400 mb-6">
-                Crea un email temporal que expirará en 1 hora
+                ⭐ Crea un email <strong className="text-primary-400">permanente</strong> - Solo se elimina cuando tú decidas
               </p>
               <button
                 onClick={generateEmail}
@@ -434,15 +460,25 @@ function App() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-slate-300">
-                  Tu dirección temporal
+                  Tu dirección permanente
                 </h3>
-                <button
-                  onClick={generateEmail}
-                  className="btn-secondary inline-flex items-center gap-2 text-sm"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Nueva
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={deleteAccount}
+                    className="btn-secondary inline-flex items-center gap-2 text-sm text-red-400 hover:bg-red-500/20"
+                    title="Eliminar cuenta permanentemente"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Eliminar
+                  </button>
+                  <button
+                    onClick={generateEmail}
+                    className="btn-secondary inline-flex items-center gap-2 text-sm"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Nueva
+                  </button>
+                </div>
               </div>
               
               <div className="flex items-center gap-3 bg-slate-900/50 p-4 rounded-xl border border-slate-700">
@@ -472,9 +508,8 @@ function App() {
               </div>
 
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-sm text-slate-400">
-                  <Clock className="w-4 h-4 inline mr-1" />
-                  Expira en 1 hora
+                <span className="text-sm text-primary-400 font-medium">
+                  ⭐ Email permanente - No expira automáticamente
                 </span>
                 <span className={`text-sm font-medium ${emails.length > 0 ? 'text-primary-400' : 'text-slate-400'}`}>
                   <Inbox className="w-4 h-4 inline mr-1" />
