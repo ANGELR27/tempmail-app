@@ -3,7 +3,7 @@ const cors = require('cors');
 const WebSocket = require('ws');
 const http = require('http');
 const path = require('path');
-const mailTM = require('./mailtm');
+const emailProvider = require('./email-provider'); // Gestor multi-provider
 const redisClient = require('./redis-client');
 
 // Configuración
@@ -99,16 +99,21 @@ wss.on('connection', (ws) => {
 // Generar nueva dirección de email temporal
 app.post('/api/generate-email', async (req, res) => {
   try {
-    const accountData = await mailTM.createAccount();
+    // Obtener provider preferido de query params (opcional)
+    const preferredProvider = req.query.provider || null;
+    
+    const accountData = await emailProvider.createAccount(preferredProvider);
     
     // Guardar en Redis SIN expiración (permanente)
-    await redisClient.set(`account:${accountData.email}`, accountData); // Sin tiempo de expiración
+    await redisClient.set(`account:${accountData.email}`, accountData);
+    
+    console.log(`✅ Email creado con provider: ${accountData.provider}`);
     
     res.json({
       email: accountData.email,
       expiresIn: null, // null = permanente
       createdAt: accountData.createdAt,
-      provider: 'mail.tm',
+      provider: accountData.provider,
       permanent: true // Indicar que es permanente
     });
   } catch (error) {
@@ -128,27 +133,31 @@ app.get('/api/emails/:address', async (req, res) => {
     // Obtener cuenta de Redis o memoria
     let account = await redisClient.get(`account:${address}`);
     if (!account) {
-      account = mailTM.getAccount(address);
+      // Intentar obtener de todos los providers
+      account = emailProvider.getAccount(address, 'mail.tm') || 
+                emailProvider.getAccount(address, 'mailsac');
     }
     
     if (!account) {
       return res.status(404).json({ error: 'Email no encontrado' });
     }
     
+    const providerName = account.provider || 'mail.tm';
+    
     // Restaurar en memoria si vino de Redis
-    if (!mailTM.getAccount(address)) {
-      mailTM.setAccount(address, account);
-      console.log(`🔄 Cuenta restaurada en memoria desde Redis: ${address}`);
+    if (!emailProvider.getAccount(address, providerName)) {
+      emailProvider.setAccount(address, account, providerName);
+      console.log(`🔄 Cuenta restaurada en memoria desde Redis: ${address} (${providerName})`);
     }
     
-    // Obtener mensajes de Mail.tm (con re-autenticación automática si es necesario)
-    const messages = await mailTM.getMessages(address);
+    // Obtener mensajes del provider correcto (con re-autenticación automática si es necesario)
+    const messages = await emailProvider.getMessages(address, providerName);
     
-    // Actualizar token en Redis si cambió (después de re-autenticación)
-    const updatedAccount = mailTM.getAccount(address);
-    if (updatedAccount && updatedAccount.token !== account.token) {
+    // Actualizar en Redis si cambió (después de re-autenticación)
+    const updatedAccount = emailProvider.getAccount(address, providerName);
+    if (updatedAccount && JSON.stringify(updatedAccount) !== JSON.stringify(account)) {
       await redisClient.set(`account:${address}`, updatedAccount);
-      console.log(`💾 Token actualizado en Redis para: ${address}`);
+      console.log(`💾 Cuenta actualizada en Redis para: ${address}`);
     }
     
     // Transformar formato
@@ -248,20 +257,27 @@ app.delete('/api/account/:address', async (req, res) => {
 
 // Información del servidor
 app.get('/api/info', (req, res) => {
+  const providerStats = emailProvider.getStats();
+  
   res.json({
-    provider: 'mail.tm',
-    platform: 'railway',
+    providers: providerStats.providers,
+    bestProvider: providerStats.bestProvider,
+    providerFailures: providerStats.failures,
+    platform: process.env.RAILWAY_ENVIRONMENT ? 'railway' : 'local',
     emailLifetime: emailLifetime,
-    redisConnected: redisClient.isConnected
+    redisConnected: redisClient.isConnected()
   });
 });
 
 // Health check
 app.get('/api/health', (req, res) => {
+  const providerStats = emailProvider.getStats();
+  
   res.json({ 
     status: 'ok',
-    provider: 'mail.tm',
-    redis: redisClient.isConnected
+    providers: providerStats.providers,
+    activeProvider: providerStats.bestProvider,
+    redis: redisClient.isConnected()
   });
 });
 
