@@ -471,15 +471,15 @@ function App() {
                 </button>
               </div>
 
-              <div className="mt-4 flex items-center gap-4 text-sm text-slate-400">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  <span>Expira en 1 hora</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Inbox className="w-4 h-4" />
-                  <span>{emails.length} mensaje{emails.length !== 1 ? 's' : ''}</span>
-                </div>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-sm text-slate-400">
+                  <Clock className="w-4 h-4 inline mr-1" />
+                  Expira en 1 hora
+                </span>
+                <span className={`text-sm font-medium ${emails.length > 0 ? 'text-primary-400' : 'text-slate-400'}`}>
+                  <Inbox className="w-4 h-4 inline mr-1" />
+                  {emails.length} {emails.length === 1 ? 'mensaje' : 'mensajes'}
+                </span>
               </div>
             </div>
           )}
