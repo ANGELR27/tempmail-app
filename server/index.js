@@ -10,7 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 // Configuración
 const PORT = process.env.PORT || 3001;
 const SMTP_PORT = process.env.SMTP_PORT || 2525;
-const APP_DOMAIN = process.env.APP_DOMAIN || 'tempmail.local';
+const APP_DOMAIN = process.env.APP_DOMAIN || process.env.RAILWAY_PUBLIC_DOMAIN || 'tempmail.local';
 
 // Almacenamiento en memoria (en producción usar Redis)
 const emailStore = new Map(); // { emailAddress: { emails: [], createdAt: Date } }
