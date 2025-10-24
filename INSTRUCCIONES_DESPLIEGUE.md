@@ -1,5 +1,18 @@
 # 🚀 DESPLEGAR A VERCEL - PASOS FINALES
 
+## ⚠️ PROBLEMAS COMUNES
+
+### ¿Error 502 en Railway?
+Si tu deployment de Railway está dando error 502:
+1. Ve a [Railway Dashboard](https://railway.app/dashboard)
+2. Revisa los logs del proyecto
+3. Si está pausado, haz click en "Resume"
+4. **Alternativa:** Despliega en Vercel (más estable para demos)
+
+Ver **[DIAGNOSTICO_ERRORES.md](./DIAGNOSTICO_ERRORES.md)** para más detalles.
+
+---
+
 ## ✅ Estado Actual
 
 Tu proyecto está listo con:
@@ -7,6 +20,7 @@ Tu proyecto está listo con:
 - ✅ Archivos commiteados
 - ✅ Código preparado para Vercel
 - ✅ Documentación completa
+- ✅ Errores de código corregidos (meta tags, manifest)
 
 ---
 

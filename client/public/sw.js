@@ -34,8 +34,33 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
-        // Retornar desde caché o hacer fetch
-        return response || fetch(event.request);
+        // Si está en caché, retornar
+        if (response) {
+          return response;
+        }
+        
+        // Hacer fetch con manejo de errores
+        return fetch(event.request)
+          .then((fetchResponse) => {
+            // No cachear errores (404, 500, etc)
+            if (!fetchResponse || fetchResponse.status !== 200 || fetchResponse.type === 'error') {
+              return fetchResponse;
+            }
+            
+            // Cachear respuestas exitosas
+            const responseToCache = fetchResponse.clone();
+            caches.open(CACHE_NAME)
+              .then((cache) => {
+                cache.put(event.request, responseToCache);
+              });
+            
+            return fetchResponse;
+          })
+          .catch((error) => {
+            // Si falla la red, intentar servir desde caché
+            console.log('Fetch failed, using offline fallback:', error);
+            return caches.match(event.request);
+          });
       })
   );
 });

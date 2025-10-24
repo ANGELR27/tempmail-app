@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#10b981" />
     <meta name="description" content="Correo electrónico temporal para proteger tu privacidad" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="TempMail" />
     <title>TempMail - Correo Temporal</title>
@@ -16,12 +16,27 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      // Registrar Service Worker solo si el archivo existe
+      // Registrar Service Worker solo en producción y si funciona
       if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(registration => console.log('SW registrado:', registration))
-            .catch(error => console.log('SW error (ignorar en dev):', error));
+          // Verificar que sw.js existe antes de registrar
+          fetch('/sw.js', { method: 'HEAD' })
+            .then(response => {
+              if (response.ok) {
+                navigator.serviceWorker.register('/sw.js')
+                  .then(registration => {
+                    console.log('✅ Service Worker registrado:', registration.scope);
+                  })
+                  .catch(error => {
+                    console.warn('⚠️ Service Worker falló al registrar:', error);
+                  });
+              } else {
+                console.log('ℹ️ Service Worker no disponible (404)');
+              }
+            })
+            .catch(() => {
+              console.log('ℹ️ Service Worker no se puede verificar');
+            });
         });
       }
     </script>

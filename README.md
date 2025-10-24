@@ -316,6 +316,47 @@ Creado con ❤️ usando Cascade AI
 
 ---
 
+## 🔍 Sistema de Detección de Errores
+
+El proyecto incluye un **sistema automatizado** para detectar, validar y corregir errores:
+
+### Comandos Disponibles:
+
+```bash
+# Validar proyecto completo
+npm run validate
+
+# Corregir errores automáticamente
+npm run fix
+
+# Verificar deployment en producción
+npm run check-deploy
+
+# Ejecutar corrección + validación
+npm run pre-deploy
+```
+
+### ¿Qué detecta?
+
+✅ Meta tags obsoletos  
+✅ Archivos faltantes  
+✅ Errores en manifest.json  
+✅ Problemas en Service Worker  
+✅ Código desincronizado (local vs producción)  
+✅ MIME types incorrectos  
+✅ Estado del servidor (502, 404, etc)
+
+### Documentación Completa:
+
+- 📖 [**SISTEMA_DETECCION.md**](./SISTEMA_DETECCION.md) - Manual completo
+- 📖 [**RESUMEN_SISTEMA.md**](./RESUMEN_SISTEMA.md) - Guía rápida
+- 📖 [**DIAGNOSTICO_ERRORES.md**](./DIAGNOSTICO_ERRORES.md) - Análisis de errores
+- 📖 [**ARREGLAR_RAILWAY.md**](./ARREGLAR_RAILWAY.md) - Solucionar Railway
+
+**💡 Tip:** Ejecuta `npm run pre-deploy` antes de cada deployment.
+
+---
+
 ## 🎯 Próximas Mejoras
 
 - [ ] Persistencia con Redis
