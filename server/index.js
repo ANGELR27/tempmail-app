@@ -32,6 +32,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Servir archivos estáticos del cliente (para producción)
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../client/dist')));
+}
+
 // Crear servidor HTTP
 const server = http.createServer(app);
 
@@ -231,6 +236,13 @@ app.get('/api/info', (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+
+// Servir el frontend en producción (debe ir después de las rutas API)
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  });
+}
 
 // Iniciar servidor HTTP
 server.listen(PORT, () => {
