@@ -1,8 +1,44 @@
-node_modules
+# Node modules
+node_modules/
+
+# Backend (no necesario en Vercel - está en Railway)
+server/
+
+# Archivos de desarrollo
 .env
 .env.local
 *.log
 .DS_Store
-server/
+
+# Scripts de prueba
 test-email.js
 test-email.ps1
+
+# Archivos innecesarios
+ARREGLAR_RAILWAY.md
+CONFIGURACION_RAILWAY.md
+DEPLOYMENT.md
+DEPLOY_INSTRUCTIONS.md
+DIAGNOSTICO_ERRORES.md
+GUIA_RAPIDA.md
+INSTRUCCIONES_DESPLIEGUE.md
+PERSISTENCIA.md
+README.md
+README_VERCEL.md
+RESUMEN_SISTEMA.md
+SISTEMA_DETECCION.md
+SOLUCION_EMAILS.md
+START.md
+TRABAJO_COMPLETADO.md
+EMAILS_PERMANENTES.md
+
+# Railway config
+railway-build.sh
+railway.json
+nixpacks.toml
+Procfile
+build.sh
+
+# Scripts locales
+start-prod.ps1
+scripts/
