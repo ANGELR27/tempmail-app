@@ -187,6 +187,12 @@ function App() {
         
         // Usar función de actualización para detectar nuevos emails sin depender del estado
         setEmails(prevEmails => {
+          // 🔒 PROTECCIÓN: Si la API devuelve vacío pero tenemos emails en cache, mantener cache
+          if (processedEmails.length === 0 && prevEmails.length > 0) {
+            console.log('📦 Preservando', prevEmails.length, 'emails del cache (API vacía)');
+            return prevEmails; // Mantener emails existentes
+          }
+          
           // Detectar nuevos emails
           const newEmails = processedEmails.filter(
             pe => !prevEmails.find(e => e.id === pe.id)
@@ -233,17 +239,29 @@ function App() {
             });
           }
           
-          return processedEmails;
+          // Combinar emails: preferir los de la API, pero agregar los del cache que no están en la API
+          let finalEmails = processedEmails;
+          if (processedEmails.length > 0) {
+            const apiIds = new Set(processedEmails.map(e => e.id));
+            const cacheOnly = prevEmails.filter(e => !apiIds.has(e.id));
+            
+            if (cacheOnly.length > 0) {
+              console.log('🔄 Combinando', processedEmails.length, 'de API +', cacheOnly.length, 'del cache');
+              finalEmails = [...processedEmails, ...cacheOnly];
+            }
+          }
+          
+          // Guardar en localStorage el estado final
+          saveEmails(currentEmail, finalEmails);
+          
+          // Actualizar contador
+          setEmailCounts(prev => ({
+            ...prev,
+            [currentEmail]: finalEmails.length
+          }));
+          
+          return finalEmails;
         });
-        
-        // Guardar en localStorage
-        saveEmails(currentEmail, processedEmails);
-        
-        // Actualizar contador
-        setEmailCounts(prev => ({
-          ...prev,
-          [currentEmail]: processedEmails.length
-        }));
       } else {
         console.warn('⚠️ Error al obtener emails:', response.status, response.statusText);
       }
