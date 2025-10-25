@@ -5,6 +5,7 @@ const http = require('http');
 const path = require('path');
 const emailProvider = require('./email-provider'); // Gestor multi-provider
 const redisClient = require('./redis-client');
+const logoService = require('./logo-service');
 
 // Configuración
 const PORT = process.env.PORT || 3001;
@@ -160,18 +161,28 @@ app.get('/api/emails/:address', async (req, res) => {
       console.log(`💾 Cuenta actualizada en Redis para: ${address}`);
     }
     
-    // Transformar formato
-    const emails = messages.map(msg => ({
-      id: msg.id,
-      from: msg.from.address,
-      to: address,
-      subject: msg.subject,
-      intro: msg.intro,
-      text: msg.text || msg.intro,
-      html: msg.html || `<p>${msg.intro}</p>`,
-      date: msg.createdAt,
-      hasAttachments: msg.hasAttachments,
-      seen: msg.seen
+    // Transformar formato y enriquecer con logos
+    const emails = await Promise.all(messages.map(async (msg) => {
+      const brandInfo = await logoService.getBrandInfo(msg.from.address, msg.html);
+      
+      return {
+        id: msg.id,
+        from: msg.from.address,
+        to: address,
+        subject: msg.subject,
+        intro: msg.intro,
+        text: msg.text || msg.intro,
+        html: msg.html || `<p>${msg.intro}</p>`,
+        date: msg.createdAt,
+        hasAttachments: msg.hasAttachments,
+        seen: msg.seen,
+        // Información de marca
+        brandInfo: {
+          logo: brandInfo.logo,
+          companyName: brandInfo.companyName,
+          domain: brandInfo.domain
+        }
+      };
     }));
     
     res.json({

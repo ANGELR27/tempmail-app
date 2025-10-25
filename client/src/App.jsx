@@ -608,13 +608,25 @@ function App() {
                           )}
                           
                           <div className="flex items-start gap-3">
-                            {/* Avatar */}
-                            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${
+                            {/* Avatar con logo o iniciales */}
+                            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs overflow-hidden ${
                               selectedEmail?.id === email.id
                                 ? 'bg-primary-500 text-white'
                                 : 'bg-slate-700 text-slate-300 group-hover:bg-slate-600'
                             } transition-colors`}>
-                              {initials}
+                              {email.brandInfo?.logo ? (
+                                <img 
+                                  src={email.brandInfo.logo} 
+                                  alt={email.brandInfo?.companyName || email.from}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.parentElement.textContent = initials;
+                                  }}
+                                />
+                              ) : (
+                                initials
+                              )}
                             </div>
                             
                             <div className="flex-1 min-w-0">
@@ -687,9 +699,21 @@ function App() {
                     <div className="bg-gradient-to-r from-slate-800/50 to-slate-800/30 border-b border-slate-700/50 p-6">
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-start gap-4 flex-1">
-                          {/* Avatar grande */}
-                          <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary-500 flex items-center justify-center font-bold text-white">
-                            {selectedEmail.from.substring(0, 2).toUpperCase()}
+                          {/* Avatar grande con logo */}
+                          <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center font-bold text-white shadow-xl overflow-hidden border-2 border-slate-700/50">
+                            {selectedEmail.brandInfo?.logo ? (
+                              <img 
+                                src={selectedEmail.brandInfo.logo} 
+                                alt={selectedEmail.brandInfo.companyName}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.parentElement.innerHTML = selectedEmail.from.substring(0, 2).toUpperCase();
+                                }}
+                              />
+                            ) : (
+                              selectedEmail.from.substring(0, 2).toUpperCase()
+                            )}
                           </div>
                           
                           <div className="flex-1">
@@ -700,8 +724,16 @@ function App() {
                             <div className="space-y-2">
                               <div className="flex items-center gap-2 text-sm">
                                 <span className="text-slate-400 font-medium min-w-[60px]">De:</span>
-                                <span className="font-mono text-slate-200 bg-slate-900/50 px-3 py-1 rounded-md">
-                                  {selectedEmail.from}
+                                <span className="text-slate-200 bg-slate-900/50 px-3 py-1 rounded-md">
+                                  {selectedEmail.brandInfo?.companyName && selectedEmail.brandInfo.companyName !== 'Desconocido' ? (
+                                    <>
+                                      <span className="font-semibold text-white">{selectedEmail.brandInfo.companyName}</span>
+                                      {' '}
+                                      <span className="font-mono text-xs text-slate-400">({selectedEmail.from})</span>
+                                    </>
+                                  ) : (
+                                    <span className="font-mono">{selectedEmail.from}</span>
+                                  )}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 text-sm">
