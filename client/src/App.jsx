@@ -774,17 +774,132 @@ function App() {
                     <div className="p-6">
                       <div className="prose prose-invert prose-lg max-w-none">
                         {selectedEmail.html ? (
-                          <div className="rounded-xl overflow-hidden border border-slate-700">
+                          <div className="rounded-xl overflow-hidden border border-slate-700/50 shadow-lg">
                             <iframe
-                              srcDoc={selectedEmail.html}
-                              className="w-full min-h-[500px] bg-white"
+                              srcDoc={`
+                                <!DOCTYPE html>
+                                <html>
+                                <head>
+                                  <meta charset="utf-8">
+                                  <style>
+                                    * {
+                                      margin: 0;
+                                      padding: 0;
+                                      box-sizing: border-box;
+                                    }
+                                    body {
+                                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                                      font-size: 15px;
+                                      line-height: 1.6;
+                                      color: #e2e8f0;
+                                      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+                                      padding: 24px;
+                                    }
+                                    h1, h2, h3, h4, h5, h6 {
+                                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                      font-weight: 600;
+                                      margin: 16px 0 8px 0;
+                                      color: #f1f5f9;
+                                    }
+                                    h1 { font-size: 24px; }
+                                    h2 { font-size: 20px; }
+                                    h3 { font-size: 18px; }
+                                    p {
+                                      margin: 12px 0;
+                                      color: #cbd5e1;
+                                    }
+                                    a {
+                                      color: #60a5fa;
+                                      text-decoration: none;
+                                      border-bottom: 1px solid #60a5fa;
+                                      transition: all 0.2s;
+                                    }
+                                    a:hover {
+                                      color: #93c5fd;
+                                      border-bottom-color: #93c5fd;
+                                    }
+                                    code {
+                                      font-family: 'Fira Code', 'Courier New', monospace;
+                                      background: rgba(100, 116, 139, 0.2);
+                                      padding: 2px 6px;
+                                      border-radius: 4px;
+                                      font-size: 14px;
+                                      color: #a5f3fc;
+                                    }
+                                    pre {
+                                      background: rgba(15, 23, 42, 0.5);
+                                      padding: 16px;
+                                      border-radius: 8px;
+                                      overflow-x: auto;
+                                      margin: 16px 0;
+                                      border: 1px solid rgba(100, 116, 139, 0.3);
+                                    }
+                                    table {
+                                      border-collapse: collapse;
+                                      width: 100%;
+                                      margin: 16px 0;
+                                      background: rgba(30, 41, 59, 0.5);
+                                      border-radius: 8px;
+                                      overflow: hidden;
+                                    }
+                                    th, td {
+                                      padding: 12px;
+                                      text-align: left;
+                                      border-bottom: 1px solid rgba(100, 116, 139, 0.2);
+                                    }
+                                    th {
+                                      background: rgba(51, 65, 85, 0.5);
+                                      font-weight: 600;
+                                      color: #f1f5f9;
+                                    }
+                                    ul, ol {
+                                      margin: 12px 0;
+                                      padding-left: 24px;
+                                    }
+                                    li {
+                                      margin: 6px 0;
+                                      color: #cbd5e1;
+                                    }
+                                    blockquote {
+                                      border-left: 3px solid #60a5fa;
+                                      padding-left: 16px;
+                                      margin: 16px 0;
+                                      color: #94a3b8;
+                                      font-style: italic;
+                                    }
+                                    img {
+                                      max-width: 100%;
+                                      height: auto;
+                                      border-radius: 8px;
+                                      margin: 12px 0;
+                                    }
+                                    hr {
+                                      border: none;
+                                      border-top: 1px solid rgba(100, 116, 139, 0.3);
+                                      margin: 24px 0;
+                                    }
+                                    strong, b {
+                                      font-weight: 600;
+                                      color: #f1f5f9;
+                                    }
+                                    em, i {
+                                      color: #cbd5e1;
+                                    }
+                                  </style>
+                                </head>
+                                <body>
+                                  ${selectedEmail.html}
+                                </body>
+                                </html>
+                              `}
+                              className="w-full min-h-[500px]"
                               sandbox="allow-same-origin"
                               title="Email content"
                             />
                           </div>
                         ) : (
-                          <div className="bg-slate-900/30 backdrop-blur-sm rounded-xl p-6 border border-slate-700/50">
-                            <pre className="whitespace-pre-wrap text-slate-200 font-sans leading-relaxed">
+                          <div className="bg-gradient-to-br from-slate-900/40 to-slate-800/40 backdrop-blur-sm rounded-xl p-8 border border-slate-700/50 shadow-xl">
+                            <pre className="whitespace-pre-wrap text-slate-200 leading-relaxed font-sans text-[15px]">
                               {selectedEmail.text}
                             </pre>
                           </div>
