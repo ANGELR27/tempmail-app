@@ -20,27 +20,65 @@ class EmailProviderManager {
     
     // Máximo de fallos antes de cambiar de provider
     this.maxFailures = 3;
+    
+    // Contador de uso para rotación equitativa
+    this.usage = {
+      'mail.tm': 0,
+      'mailsac': 0
+    };
+    
+    // Último provider usado para rotación round-robin
+    this.lastUsedProvider = null;
+    
+    // Timestamp del último cambio de provider
+    this.lastProviderChange = Date.now();
   }
 
-  // Obtener el mejor provider disponible
+  // Obtener el mejor provider disponible con rotación inteligente
   getBestProvider() {
-    // Si el default tiene pocos fallos, usarlo
-    if (this.failures[this.defaultProvider] < this.maxFailures) {
+    const providers = Object.keys(this.providers);
+    
+    // Filtrar providers con muchos fallos
+    const availableProviders = providers.filter(
+      p => this.failures[p] < this.maxFailures
+    );
+    
+    // Si no hay providers disponibles, resetear contadores
+    if (availableProviders.length === 0) {
+      console.log('⚠️ Todos los providers tienen fallos, reseteando contadores');
+      for (const p of providers) {
+        this.failures[p] = 0;
+      }
       return this.defaultProvider;
     }
     
-    // Buscar provider con menos fallos
-    let bestProvider = this.defaultProvider;
-    let minFailures = this.failures[this.defaultProvider];
+    // Si solo hay un provider disponible, usarlo
+    if (availableProviders.length === 1) {
+      return availableProviders[0];
+    }
     
-    for (const [name, count] of Object.entries(this.failures)) {
-      if (count < minFailures) {
-        minFailures = count;
-        bestProvider = name;
+    // Rotación cada 5 minutos para balancear carga
+    const timeSinceChange = Date.now() - this.lastProviderChange;
+    if (timeSinceChange > 300000) { // 5 minutos
+      // Rotar al siguiente provider con menos uso
+      const sortedByUsage = availableProviders.sort(
+        (a, b) => this.usage[a] - this.usage[b]
+      );
+      const nextProvider = sortedByUsage[0];
+      
+      if (nextProvider !== this.lastUsedProvider) {
+        this.lastProviderChange = Date.now();
+        this.lastUsedProvider = nextProvider;
+        console.log(`🔄 Rotando a provider: ${nextProvider} (uso: ${this.usage[nextProvider]})`);
+        return nextProvider;
       }
     }
     
-    console.log(`🔄 Usando provider: ${bestProvider} (fallos: ${minFailures})`);
+    // Usar provider con menos fallos
+    const bestProvider = availableProviders.reduce((best, current) => {
+      return this.failures[current] < this.failures[best] ? current : best;
+    });
+    
     return bestProvider;
   }
 
@@ -129,7 +167,10 @@ class EmailProviderManager {
     return {
       providers: Object.keys(this.providers),
       failures: this.failures,
-      bestProvider: this.getBestProvider()
+      usage: this.usage,
+      bestProvider: this.getBestProvider(),
+      lastProviderChange: this.lastProviderChange,
+      timeSinceChange: Date.now() - this.lastProviderChange
     };
   }
 }
