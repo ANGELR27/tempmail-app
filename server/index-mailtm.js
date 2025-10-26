@@ -110,12 +110,19 @@ app.post('/api/generate-email', async (req, res) => {
     
     console.log(`✅ Email creado con provider: ${accountData.provider}`);
     
+    // 🔑 DEVOLVER CREDENCIALES COMPLETAS al cliente para que las guarde
     res.json({
       email: accountData.email,
       expiresIn: null, // null = permanente
       createdAt: accountData.createdAt,
       provider: accountData.provider,
-      permanent: true // Indicar que es permanente
+      permanent: true, // Indicar que es permanente
+      // Credenciales para re-autenticación (el cliente las guardará)
+      credentials: {
+        id: accountData.id,
+        password: accountData.password,
+        token: accountData.token
+      }
     });
   } catch (error) {
     console.error('Error generando email:', error);
@@ -139,8 +146,34 @@ app.get('/api/emails/:address', async (req, res) => {
                 emailProvider.getAccount(address, 'mailsac');
     }
     
+    // 🔄 Si no existe la cuenta en memoria/Redis, intentar restaurarla desde las credenciales del cliente
     if (!account) {
-      return res.status(404).json({ error: 'Email no encontrado' });
+      const credentials = req.headers['x-account-credentials'];
+      if (credentials) {
+        try {
+          const parsedCreds = JSON.parse(credentials);
+          console.log(`🔄 Restaurando cuenta desde credenciales del cliente: ${address}`);
+          
+          // Restaurar cuenta en memoria del provider
+          const providerName = parsedCreds.provider || 'mail.tm';
+          emailProvider.setAccount(address, parsedCreds, providerName);
+          
+          // Guardar en Redis para futuras peticiones
+          await redisClient.set(`account:${address}`, parsedCreds);
+          
+          account = parsedCreds;
+          console.log(`✅ Cuenta restaurada exitosamente: ${address}`);
+        } catch (e) {
+          console.error('Error parseando credenciales:', e);
+        }
+      }
+    }
+    
+    if (!account) {
+      return res.status(404).json({ 
+        error: 'Email no encontrado',
+        needsRestore: true // Indicar al cliente que envíe credenciales
+      });
     }
     
     const providerName = account.provider || 'mail.tm';

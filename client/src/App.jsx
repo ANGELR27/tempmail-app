@@ -6,6 +6,7 @@ import { extractMainCode, detectServiceType } from './utils/codeExtractor';
 import { updateStats } from './utils/stats';
 import { StatsPanel } from './components/StatsPanel';
 import { saveEmails, getEmails, getEmailCount, getAllEmailCounts, clearEmails } from './utils/emailStorage';
+import { saveCredentials, getCredentials, deleteCredentials } from './utils/credentials';
 
 const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3001/api';
 const WS_URL = 'ws://localhost:3001'; // WebSocket solo funciona en desarrollo local
@@ -140,6 +141,15 @@ function App() {
       // Guardar tiempo de creación
       setEmailCreatedTime(Date.now());
       
+      // 🔑 Guardar credenciales en localStorage para re-autenticación
+      if (data.credentials) {
+        saveCredentials(data.email, {
+          ...data.credentials,
+          provider: data.provider
+        });
+        console.log('✅ Credenciales guardadas localmente para:', data.email);
+      }
+      
       // Guardar en historial (permanente - sin expiración)
       const expiresAt = data.permanent ? null : (Date.now() + data.expiresIn);
       saveToHistory(data.email, expiresAt);
@@ -169,7 +179,17 @@ function App() {
     }
     
     try {
-      const response = await fetch(`${API_URL}/emails/${encodeURIComponent(currentEmail)}`);
+      // 🔑 Obtener credenciales guardadas para enviarlas al servidor
+      const credentials = getCredentials(currentEmail);
+      const headers = {};
+      
+      if (credentials) {
+        headers['x-account-credentials'] = JSON.stringify(credentials);
+      }
+      
+      const response = await fetch(`${API_URL}/emails/${encodeURIComponent(currentEmail)}`, {
+        headers
+      });
       if (response.ok) {
         const data = await response.json();
         
@@ -306,6 +326,9 @@ function App() {
       
       // Limpiar emails del localStorage
       clearEmails(currentEmail);
+      
+      // 🔑 Eliminar credenciales guardadas
+      deleteCredentials(currentEmail);
       
       // Limpiar estado
       setCurrentEmail('');
