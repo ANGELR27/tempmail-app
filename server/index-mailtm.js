@@ -1,11 +1,14 @@
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const WebSocket = require('ws');
 const http = require('http');
 const path = require('path');
 const emailProvider = require('./email-provider'); // Gestor multi-provider
 const redisClient = require('./redis-client');
 const logoService = require('./logo-service');
+const { validateEmailParam, validateEmailId, validateJsonBody, validateRequestSize } = require('./middleware/validator');
+const { rateLimiters } = require('./middleware/rateLimiter');
 
 // Configuración
 const PORT = process.env.PORT || 3001;
@@ -17,8 +20,22 @@ redisClient.connect();
 
 // Configurar Express
 const app = express();
+
+// Compresión de respuestas (70-80% reducción)
+app.use(compression({
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  },
+  level: 6
+}));
+
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' })); // Limitar tamaño de JSON
+app.use(validateJsonBody); // Validar Content-Type
+app.use(validateRequestSize(1024 * 1024)); // Max 1MB por petición
 
 // Servir archivos estáticos del cliente (para producción)
 if (process.env.NODE_ENV === 'production') {
@@ -97,8 +114,11 @@ wss.on('connection', (ws) => {
 
 // API Routes
 
+// Rate limiting general para todas las rutas API
+app.use('/api/', rateLimiters.normal);
+
 // Generar nueva dirección de email temporal
-app.post('/api/generate-email', async (req, res) => {
+app.post('/api/generate-email', rateLimiters.createEmail, async (req, res) => {
   try {
     // Obtener provider preferido de query params (opcional)
     const preferredProvider = req.query.provider || null;
@@ -134,9 +154,9 @@ app.post('/api/generate-email', async (req, res) => {
 });
 
 // Obtener emails de una dirección
-app.get('/api/emails/:address', async (req, res) => {
+app.get('/api/emails/:address', validateEmailParam, /* rateLimiters.getEmails, */ async (req, res) => {
   try {
-    const address = decodeURIComponent(req.params.address);
+    const address = req.validatedEmail;
     
     // Obtener cuenta de Redis o memoria
     let account = await redisClient.get(`account:${address}`);
@@ -234,12 +254,16 @@ app.get('/api/emails/:address', async (req, res) => {
 });
 
 // Obtener un email específico
-app.get('/api/emails/:address/:emailId', async (req, res) => {
+app.get('/api/emails/:address/:emailId', validateEmailParam, validateEmailId, async (req, res) => {
   try {
-    const address = decodeURIComponent(req.params.address);
-    const emailId = req.params.emailId;
+    const address = req.validatedEmail;
+    const emailId = req.validatedEmailId;
     
-    const message = await mailTM.getMessage(address, emailId);
+    // Obtener cuenta y provider
+    const account = await redisClient.get(`account:${address}`);
+    const providerName = account?.provider || 'mail.tm';
+    
+    const message = await emailProvider.getMessage(address, emailId, providerName);
     
     const email = {
       id: message.id,
@@ -260,12 +284,16 @@ app.get('/api/emails/:address/:emailId', async (req, res) => {
 });
 
 // Eliminar un email
-app.delete('/api/emails/:address/:emailId', async (req, res) => {
+app.delete('/api/emails/:address/:emailId', validateEmailParam, validateEmailId, async (req, res) => {
   try {
-    const address = decodeURIComponent(req.params.address);
-    const emailId = req.params.emailId;
+    const address = req.validatedEmail;
+    const emailId = req.validatedEmailId;
     
-    await mailTM.deleteMessage(address, emailId);
+    // Obtener cuenta y provider
+    const account = await redisClient.get(`account:${address}`);
+    const providerName = account?.provider || 'mail.tm';
+    
+    await emailProvider.deleteMessage(address, emailId, providerName);
     res.json({ success: true });
   } catch (error) {
     console.error('Error eliminando email:', error);
@@ -274,19 +302,22 @@ app.delete('/api/emails/:address/:emailId', async (req, res) => {
 });
 
 // 🗑️ Eliminar cuenta de email (permanente - solo cuando el usuario lo decida)
-app.delete('/api/account/:address', async (req, res) => {
+app.delete('/api/account/:address', validateEmailParam, async (req, res) => {
   try {
-    const address = decodeURIComponent(req.params.address);
+    const address = req.validatedEmail;
+    
+    // Obtener información de la cuenta antes de eliminar
+    const account = await redisClient.get(`account:${address}`);
+    const providerName = account?.provider || 'mail.tm';
     
     // Eliminar de Redis
     await redisClient.del(`account:${address}`);
     
-    // Eliminar de memoria
-    const account = mailTM.getAccount(address);
-    if (account) {
-      // Mail.tm no tiene API para eliminar cuentas, pero podemos eliminarla de nuestro sistema
-      mailTM.accounts.delete(address);
-      console.log(`🗑️ Cuenta eliminada del sistema: ${address}`);
+    // Eliminar de memoria del provider correspondiente
+    const provider = emailProvider.providers[providerName];
+    if (provider && provider.accounts) {
+      provider.accounts.delete(address);
+      console.log(`🗑️ Cuenta eliminada del sistema: ${address} (${providerName})`);
     }
     
     res.json({ 

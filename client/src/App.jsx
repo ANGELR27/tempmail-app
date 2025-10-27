@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Mail, RefreshCw, Copy, Check, Trash2, Clock, Inbox, ExternalLink, History, X, BarChart3 } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Mail, RefreshCw, Copy, Check, Trash2, Clock, Inbox, ExternalLink, History, X, BarChart3, Search, Filter } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { extractMainCode, detectServiceType } from './utils/codeExtractor';
@@ -7,6 +7,9 @@ import { updateStats } from './utils/stats';
 import { StatsPanel } from './components/StatsPanel';
 import { saveEmails, getEmails, getEmailCount, getAllEmailCounts, clearEmails } from './utils/emailStorage';
 import { saveCredentials, getCredentials, deleteCredentials } from './utils/credentials';
+import { filterEmails, getAvailableServices } from './utils/emailFilter';
+import { useSmartPolling } from './hooks/useSmartPolling';
+import { EmailListSkeleton } from './components/EmailSkeleton';
 
 const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3001/api';
 const WS_URL = 'ws://localhost:3001'; // WebSocket solo funciona en desarrollo local
@@ -24,6 +27,10 @@ function App() {
   const [showStats, setShowStats] = useState(false);
   const [emailCreatedTime, setEmailCreatedTime] = useState(null);
   const [emailCounts, setEmailCounts] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterService, setFilterService] = useState('all');
+  const [onlyWithCodes, setOnlyWithCodes] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(null);
 
   // Cargar historial de emails desde localStorage
   useEffect(() => {
@@ -345,13 +352,39 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    if (currentEmail) {
-      fetchEmails();
-      const interval = setInterval(fetchEmails, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [currentEmail, fetchEmails]);
+  // Reemplazar polling simple por polling inteligente
+  const pollingCallback = useCallback(async () => {
+    const previousCount = emails.length;
+    await fetchEmails();
+    // Retornar true si hay nuevos emails
+    return emails.length > previousCount;
+  }, [fetchEmails, emails.length]);
+  
+  useSmartPolling(pollingCallback, currentEmail, {
+    minDelay: 5000,
+    maxDelay: 60000,
+    emptyThreshold: 3
+  });
+
+  // Filtrar emails basado en búsqueda y filtros
+  const filteredEmails = useMemo(() => {
+    return filterEmails(emails, searchTerm, {
+      service: filterService,
+      onlyWithCodes
+    });
+  }, [emails, searchTerm, filterService, onlyWithCodes]);
+  
+  // Obtener servicios disponibles para el filtro
+  const availableServices = useMemo(() => {
+    return getAvailableServices(emails);
+  }, [emails]);
+  
+  // Función para copiar código
+  const copyCode = (code) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
 
   return (
     <div className="min-h-screen p-4 md:p-8 relative">
