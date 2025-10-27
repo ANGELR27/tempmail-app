@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Mail, RefreshCw, Copy, Check, Trash2, Clock, Inbox, ExternalLink, History, X, BarChart3, Search, Filter } from 'lucide-react';
+import { Mail, RefreshCw, Copy, Check, Trash2, Clock, Inbox, ExternalLink, History, X, BarChart3, Search, Filter, Star, MoreVertical, Archive, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { extractMainCode, detectServiceType } from './utils/codeExtractor';
@@ -31,6 +31,13 @@ function App() {
   const [filterService, setFilterService] = useState('all');
   const [onlyWithCodes, setOnlyWithCodes] = useState(false);
   const [copiedCode, setCopiedCode] = useState(null);
+  const [starredEmails, setStarredEmails] = useState(() => {
+    const saved = localStorage.getItem('starredEmails');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [showMenu, setShowMenu] = useState(null);
+  const [expandedEmail, setExpandedEmail] = useState(false);
+  const [showOnlyStarred, setShowOnlyStarred] = useState(false);
 
   // Cargar historial de emails desde localStorage
   useEffect(() => {
@@ -386,6 +393,34 @@ function App() {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
+  // Funciones para mensajes anclados
+  const toggleStar = (emailId) => {
+    setStarredEmails(prev => {
+      const newStarred = prev.includes(emailId)
+        ? prev.filter(id => id !== emailId)
+        : [...prev, emailId];
+      localStorage.setItem('starredEmails', JSON.stringify(newStarred));
+      return newStarred;
+    });
+  };
+
+  const isStarred = (emailId) => starredEmails.includes(emailId);
+
+  // Ordenar y filtrar emails: anclados primero y opcionalmente solo destacados
+  const sortedEmails = useMemo(() => {
+    let result = showOnlyStarred 
+      ? filteredEmails.filter(email => isStarred(email.id))
+      : filteredEmails;
+    
+    return [...result].sort((a, b) => {
+      const aStarred = isStarred(a.id);
+      const bStarred = isStarred(b.id);
+      if (aStarred && !bStarred) return -1;
+      if (!aStarred && bStarred) return 1;
+      return 0;
+    });
+  }, [filteredEmails, starredEmails, showOnlyStarred]);
+
   return (
     <div className="min-h-screen p-4 md:p-8 relative">
       {/* Panel de Estadísticas */}
@@ -450,7 +485,7 @@ function App() {
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-400 opacity-75"></span>
                                     <span className="relative inline-flex rounded-full h-3 w-3 bg-primary-500"></span>
                                   </span>
-                                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary-500/20 text-primary-400 font-semibold">
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary-500/20 text-primary-400 border border-primary-500/30">
                                     {messageCount} {messageCount === 1 ? 'mensaje' : 'mensajes'}
                                   </span>
                                 </div>
@@ -615,44 +650,86 @@ function App() {
                     <Inbox className="w-5 h-5 text-primary-400" />
                     Bandeja de entrada
                   </h3>
-                  <button
-                    onClick={fetchEmails}
-                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowOnlyStarred(!showOnlyStarred)}
+                      className={`p-2 rounded-lg transition-all ${
+                        showOnlyStarred
+                          ? 'bg-amber-500/20 text-amber-400'
+                          : 'hover:bg-slate-700 text-slate-400'
+                      }`}
+                      title={showOnlyStarred ? 'Mostrar todos' : 'Solo destacados'}
+                    >
+                      <Star className={`w-4 h-4 ${showOnlyStarred ? 'fill-current' : ''}`} />
+                    </button>
+                    <button
+                      onClick={fetchEmails}
+                      className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                  {emails.length === 0 ? (
+                  {sortedEmails.length === 0 ? (
                     <div className="text-center py-12 text-slate-400">
                       <div className="relative inline-block mb-4">
-                        <Mail className="w-16 h-16 mx-auto opacity-20" />
-                        <div className="absolute inset-0 animate-ping opacity-10">
-                          <Mail className="w-16 h-16" />
-                        </div>
+                        {showOnlyStarred ? (
+                          <Star className="w-16 h-16 mx-auto opacity-20" />
+                        ) : (
+                          <>
+                            <Mail className="w-16 h-16 mx-auto opacity-20" />
+                            <div className="absolute inset-0 animate-ping opacity-10">
+                              <Mail className="w-16 h-16" />
+                            </div>
+                          </>
+                        )}
                       </div>
-                      <p className="font-semibold text-lg mb-2">No hay mensajes</p>
+                      <p className="font-semibold text-lg mb-2">
+                        {showOnlyStarred ? 'No hay mensajes destacados' : 'No hay mensajes'}
+                      </p>
                       <p className="text-sm text-slate-500">
-                        Los emails llegarán aquí automáticamente
+                        {showOnlyStarred 
+                          ? 'Marca mensajes con la estrella para destacarlos'
+                          : 'Los emails llegarán aquí automáticamente'
+                        }
                       </p>
                     </div>
                   ) : (
-                    emails.map((email, index) => {
+                    sortedEmails.map((email, index) => {
                       const isNew = index < 3; // Simular nuevos
                       const hasCode = email.extractedCode;
                       const initials = email.from.substring(0, 2).toUpperCase();
+                      const starred = isStarred(email.id);
                       
                       return (
-                        <button
+                        <div
                           key={email.id}
-                          onClick={() => setSelectedEmail(email)}
                           className={`group w-full text-left p-4 rounded-xl transition-all duration-200 ${
                             selectedEmail?.id === email.id
                               ? 'bg-gradient-to-r from-primary-500/20 to-primary-600/10 border-primary-500 shadow-lg shadow-primary-500/20'
+                              : starred
+                              ? 'bg-amber-500/10 hover:bg-amber-500/15 border-amber-500/30'
                               : 'bg-slate-800/40 hover:bg-slate-700/50 border-slate-700/50'
                           } border relative overflow-hidden`}
                         >
+                          {/* Botón de estrella */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleStar(email.id);
+                            }}
+                            className={`absolute top-2 left-2 z-10 p-1.5 rounded-lg transition-all ${
+                              starred
+                                ? 'text-amber-400 bg-amber-500/20 hover:bg-amber-500/30'
+                                : 'text-slate-400 hover:text-amber-400 hover:bg-slate-700/50 opacity-0 group-hover:opacity-100'
+                            }`}
+                            title={starred ? 'Quitar de destacados' : 'Destacar mensaje'}
+                          >
+                            <Star className={`w-4 h-4 ${starred ? 'fill-current' : ''}`} />
+                          </button>
+                          
                           {/* Indicador de nuevo */}
                           {isNew && selectedEmail?.id !== email.id && (
                             <div className="absolute top-2 right-2">
@@ -663,17 +740,17 @@ function App() {
                             </div>
                           )}
                           
-                          <div className="flex items-start gap-3">
+                          <div className="flex items-start gap-3" onClick={() => setSelectedEmail(email)}>
                             {/* Avatar con logo o iniciales */}
                             <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs overflow-hidden ${
                               selectedEmail?.id === email.id
                                 ? 'bg-primary-500 text-white'
                                 : 'bg-slate-700 text-slate-300 group-hover:bg-slate-600'
-                            } transition-colors`}>
+                            }`}>
                               {email.brandInfo?.logo ? (
                                 <img 
                                   src={email.brandInfo.logo} 
-                                  alt={email.brandInfo?.companyName || email.from}
+                                  alt={email.brandInfo.companyName}
                                   className="w-full h-full object-cover"
                                   onError={(e) => {
                                     e.target.style.display = 'none';
@@ -727,7 +804,7 @@ function App() {
                               </div>
                             </div>
                           </div>
-                        </button>
+                        </div>
                       );
                     })
                   )}
@@ -750,11 +827,11 @@ function App() {
                     <p className="text-sm text-slate-500">Haz clic en un email para ver su contenido</p>
                   </div>
                 ) : (
-                  <div>
-                    {/* Header del email */}
-                    <div className="bg-gradient-to-r from-slate-800/50 to-slate-800/30 border-b border-slate-700/50 p-6">
+                  <div className="flex flex-col h-full">
+                    {/* Header del email con diseño mejorado */}
+                    <div className="bg-gradient-to-br from-slate-800/90 via-slate-800/70 to-slate-900/90 border-b border-slate-700/50 p-6 backdrop-blur-sm">
                       <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-start gap-4 flex-1">
+                        <div className="flex items-start gap-4 flex-1 min-w-0">
                           {/* Avatar grande con logo */}
                           <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center font-bold text-white shadow-xl overflow-hidden border-2 border-slate-700/50">
                             {selectedEmail.brandInfo?.logo ? (
@@ -811,13 +888,36 @@ function App() {
                           </div>
                         </div>
                         
-                        <button
-                          onClick={() => deleteEmail(selectedEmail.id)}
-                          className="btn-secondary inline-flex items-center gap-2 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50 transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Eliminar
-                        </button>
+                        {/* Barra de acciones mejorada */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => toggleStar(selectedEmail.id)}
+                            className={`p-2.5 rounded-lg transition-all ${
+                              isStarred(selectedEmail.id)
+                                ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                                : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700 hover:text-amber-400'
+                            }`}
+                            title={isStarred(selectedEmail.id) ? 'Quitar de destacados' : 'Destacar mensaje'}
+                          >
+                            <Star className={`w-5 h-5 ${isStarred(selectedEmail.id) ? 'fill-current' : ''}`} />
+                          </button>
+                          
+                          <button
+                            onClick={() => deleteEmail(selectedEmail.id)}
+                            className="p-2.5 rounded-lg bg-slate-700/50 text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-all"
+                            title="Eliminar mensaje"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                          
+                          <button
+                            onClick={() => setExpandedEmail(!expandedEmail)}
+                            className="p-2.5 rounded-lg bg-slate-700/50 text-slate-400 hover:bg-slate-700 transition-all"
+                            title={expandedEmail ? 'Contraer' : 'Expandir'}
+                          >
+                            {expandedEmail ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                          </button>
+                        </div>
                       </div>
                       
                       {/* Badge de información */}
@@ -858,14 +958,13 @@ function App() {
                       </div>
                     )}
 
-                    {/* Contenido del email */}
-                    <div className="p-6">
+                    {/* Contenido del email con diseño mejorado */}
+                    <div className="p-6 flex-1 overflow-y-auto bg-gradient-to-br from-slate-900/40 to-slate-800/20">
                       <div className="prose prose-invert prose-lg max-w-none">
                         {selectedEmail.html ? (
-                          <div className="rounded-xl overflow-hidden border border-slate-700/50 shadow-lg">
+                          <div className="rounded-2xl overflow-hidden border border-slate-700/50 shadow-2xl bg-gradient-to-br from-slate-900 to-slate-800">
                             <iframe
-                              srcDoc={`
-                                <!DOCTYPE html>
+                              srcDoc={`<!DOCTYPE html>
                                 <html>
                                 <head>
                                   <meta charset="utf-8">
@@ -980,39 +1079,41 @@ function App() {
                                 </body>
                                 </html>
                               `}
-                              className="w-full min-h-[500px]"
+                              className={`w-full transition-all duration-300 ${expandedEmail ? 'min-h-[800px]' : 'min-h-[500px]'}`}
                               sandbox="allow-same-origin"
                               title="Email content"
                             />
                           </div>
                         ) : (
-                          <div className="bg-gradient-to-br from-slate-900/40 to-slate-800/40 backdrop-blur-sm rounded-xl p-8 border border-slate-700/50 shadow-xl">
-                            <pre className="whitespace-pre-wrap text-slate-200 leading-relaxed font-sans text-[15px]">
+                          <div className="bg-gradient-to-br from-slate-900/60 via-slate-800/50 to-slate-900/60 backdrop-blur-sm rounded-2xl p-8 border border-slate-700/50 shadow-2xl">
+                            <pre className="whitespace-pre-wrap text-slate-200 leading-loose font-sans text-base max-w-none break-words">
                               {selectedEmail.text}
                             </pre>
                           </div>
                         )}
                       </div>
 
-                      {/* Archivos adjuntos */}
+                      {/* Archivos adjuntos con diseño mejorado */}
                       {selectedEmail.attachments?.length > 0 && (
-                        <div className="mt-8 pt-6 border-t border-slate-700/50">
-                          <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                            <ExternalLink className="w-5 h-5 text-primary-400" />
+                        <div className="mt-8 pt-6 border-t border-slate-700/30">
+                          <h3 className="font-bold text-xl mb-5 flex items-center gap-2 text-slate-100">
+                            <div className="p-2 bg-primary-500/20 rounded-lg">
+                              <ExternalLink className="w-5 h-5 text-primary-400" />
+                            </div>
                             Archivos Adjuntos ({selectedEmail.attachments.length})
                           </h3>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {selectedEmail.attachments.map((att, idx) => (
                               <div
                                 key={idx}
-                                className="group flex items-center gap-3 bg-gradient-to-r from-slate-800/50 to-slate-800/30 hover:from-slate-700/50 hover:to-slate-700/30 p-4 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-all cursor-pointer"
+                                className="group flex items-center gap-4 bg-gradient-to-br from-slate-800/70 via-slate-800/50 to-slate-900/70 hover:from-slate-700/70 hover:to-slate-800/70 p-5 rounded-xl border border-slate-700/50 hover:border-primary-500/50 transition-all cursor-pointer shadow-lg hover:shadow-primary-500/10"
                               >
-                                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary-500/20 flex items-center justify-center">
-                                  <ExternalLink className="w-5 h-5 text-primary-400" />
+                                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500/30 to-primary-600/20 flex items-center justify-center shadow-inner">
+                                  <ExternalLink className="w-6 h-6 text-primary-400" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-sm truncate">{att.filename}</div>
-                                  <div className="text-xs text-slate-400 mt-0.5">
+                                  <div className="font-semibold text-sm truncate text-slate-100">{att.filename}</div>
+                                  <div className="text-xs text-slate-400 mt-1 font-medium">
                                     {(att.size / 1024).toFixed(2)} KB
                                   </div>
                                 </div>
