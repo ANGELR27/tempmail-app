@@ -147,7 +147,33 @@ function App() {
       const response = await fetch(`${API_URL}/generate-email`, {
         method: 'POST',
       });
-      const data = await response.json();
+      
+      // Verificar que la respuesta sea exitosa
+      if (!response.ok) {
+        let errorMessage = `Error del servidor (${response.status})`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (e) {
+          // Si no se puede parsear el JSON del error, usar el mensaje por defecto
+        }
+        throw new Error(errorMessage);
+      }
+      
+      // Intentar parsear el JSON
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('Error parseando respuesta:', jsonError);
+        throw new Error('El servidor devolvió una respuesta inválida. Por favor, intenta de nuevo.');
+      }
+      
+      // Verificar que tengamos los datos necesarios
+      if (!data || !data.email) {
+        throw new Error('El servidor no devolvió una dirección de email válida');
+      }
+      
       setCurrentEmail(data.email);
       setEmails([]);
       setSelectedEmail(null);
@@ -167,9 +193,15 @@ function App() {
       // Guardar en historial (permanente - sin expiración)
       const expiresAt = data.permanent ? null : (Date.now() + data.expiresIn);
       saveToHistory(data.email, expiresAt);
+      
+      console.log('✅ Email generado exitosamente:', data.email);
+      
     } catch (error) {
-      console.error('Error generando email:', error);
-      alert('Error al generar email');
+      console.error('❌ Error generando email:', error);
+      
+      // Mostrar mensaje de error más específico
+      const errorMsg = error.message || 'Error desconocido al generar email';
+      alert(`Error al generar email:\n\n${errorMsg}\n\nPor favor, intenta de nuevo en unos momentos.`);
     } finally {
       setLoading(false);
     }
@@ -368,8 +400,8 @@ function App() {
   }, [fetchEmails, emails.length]);
   
   useSmartPolling(pollingCallback, currentEmail, {
-    minDelay: 5000,
-    maxDelay: 60000,
+    minDelay: import.meta.env.PROD ? 15000 : 5000, // 15s en producción, 5s en desarrollo
+    maxDelay: 120000, // 2 minutos máximo
     emptyThreshold: 3
   });
 

@@ -33,48 +33,50 @@ app.use(compression({
 }));
 
 app.use(cors());
-app.use(express.json({ limit: '1mb' })); // Limitar tamaño de JSON
-app.use(validateJsonBody); // Validar Content-Type
-app.use(validateRequestSize(1024 * 1024)); // Max 1MB por petición
 
-// Servir archivos estáticos del cliente (para producción)
+// ⚡ IMPORTANTE: Servir archivos estáticos ANTES de middlewares de parsing y rate limiting
+// para evitar que los assets sean bloqueados o procesados innecesariamente
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../client/dist');
   
-  // Log para debugging
   console.log('📁 Sirviendo archivos estáticos desde:', distPath);
   
-  // Servir archivos de la carpeta assets con maxAge
-  app.use('/assets', express.static(path.join(distPath, 'assets'), {
-    maxAge: '1y',
+  // Configuración de headers mejorada para archivos estáticos
+  const staticOptions = {
+    maxAge: '1d', // Cache de 1 día para archivos
+    etag: true,
+    lastModified: true,
     setHeaders: (res, filePath) => {
+      // MIME types correctos y cache
       if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
         res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 año para JS con hash
       } else if (filePath.endsWith('.css')) {
         res.setHeader('Content-Type', 'text/css; charset=utf-8');
-      }
-    }
-  }));
-  
-  // Servir otros archivos estáticos del root
-  app.use(express.static(distPath, {
-    index: false, // No servir index.html automáticamente
-    setHeaders: (res, filePath) => {
-      // Configurar MIME types correctos
-      if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
-        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      } else if (filePath.endsWith('.css')) {
-        res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 año para CSS con hash
       } else if (filePath.endsWith('.json')) {
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
       } else if (filePath.endsWith('.svg')) {
         res.setHeader('Content-Type', 'image/svg+xml');
       } else if (filePath.endsWith('.png')) {
         res.setHeader('Content-Type', 'image/png');
+      } else if (filePath.endsWith('.ico')) {
+        res.setHeader('Content-Type', 'image/x-icon');
+      } else if (filePath.endsWith('.webp')) {
+        res.setHeader('Content-Type', 'image/webp');
       }
     }
-  }));
+  };
+  
+  // Servir archivos estáticos (assets primero, luego root)
+  app.use('/assets', express.static(path.join(distPath, 'assets'), staticOptions));
+  app.use(express.static(distPath, { ...staticOptions, index: false }));
 }
+
+// Middlewares de parsing y validación (DESPUÉS de archivos estáticos)
+app.use(express.json({ limit: '1mb' }));
+app.use(validateJsonBody);
+app.use(validateRequestSize(1024 * 1024));
 
 // Crear servidor HTTP
 const server = http.createServer(app);
@@ -114,8 +116,8 @@ wss.on('connection', (ws) => {
 
 // API Routes
 
-// Rate limiting general para todas las rutas API
-app.use('/api/', rateLimiters.normal);
+// Rate limiting MUY relajado para producción (Railway tiene su propio rate limit)
+app.use('/api/', rateLimiters.relaxed);
 
 // Generar nueva dirección de email temporal
 app.post('/api/generate-email', rateLimiters.createEmail, async (req, res) => {
@@ -123,12 +125,23 @@ app.post('/api/generate-email', rateLimiters.createEmail, async (req, res) => {
     // Obtener provider preferido de query params (opcional)
     const preferredProvider = req.query.provider || null;
     
+    console.log('🔄 Intentando crear cuenta con provider:', preferredProvider || 'auto');
+    
     const accountData = await emailProvider.createAccount(preferredProvider);
     
-    // Guardar en Redis SIN expiración (permanente)
-    await redisClient.set(`account:${accountData.email}`, accountData);
+    if (!accountData || !accountData.email) {
+      throw new Error('El proveedor no devolvió datos de cuenta válidos');
+    }
     
-    console.log(`✅ Email creado con provider: ${accountData.provider}`);
+    // Guardar en Redis SIN expiración (permanente) - solo si Redis está disponible
+    try {
+      await redisClient.set(`account:${accountData.email}`, accountData);
+      console.log('💾 Cuenta guardada en Redis');
+    } catch (redisError) {
+      console.warn('⚠️  Redis no disponible, continuando sin persistencia:', redisError.message);
+    }
+    
+    console.log(`✅ Email creado exitosamente: ${accountData.email} (${accountData.provider})`);
     
     // 🔑 DEVOLVER CREDENCIALES COMPLETAS al cliente para que las guarde
     res.json({
@@ -145,10 +158,16 @@ app.post('/api/generate-email', rateLimiters.createEmail, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error generando email:', error);
+    console.error('❌ Error generando email:', {
+      message: error.message,
+      stack: error.stack,
+      response: error.response?.data
+    });
+    
     res.status(500).json({ 
       error: 'Error generando email temporal',
-      message: error.message 
+      message: error.message || 'Error desconocido',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -358,14 +377,28 @@ app.get('/api/health', (req, res) => {
 
 // Servir el frontend en producción (DEBE IR AL FINAL)
 if (process.env.NODE_ENV === 'production') {
-  // Solo enviar index.html para rutas que NO sean archivos estáticos
+  const indexPath = path.join(__dirname, '../client/dist/index.html');
+  
+  // Solo enviar index.html para rutas que NO sean archivos estáticos ni API
   app.get('*', (req, res, next) => {
+    // Si es una ruta API, pasar al siguiente middleware (404)
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
+    
     // Si la ruta incluye un punto (archivo estático), pasar al siguiente middleware
     if (req.path.includes('.')) {
       return next();
     }
-    // Para rutas normales, enviar el index.html
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+    
+    // Para rutas normales (SPA), enviar el index.html
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        console.error('Error enviando index.html:', err);
+        res.status(500).send('Error cargando la aplicación');
+      }
+    });
   });
 }
 

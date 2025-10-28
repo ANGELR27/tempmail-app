@@ -9,45 +9,97 @@ class MailTMService {
 
   // Crear una cuenta temporal en Mail.tm
   async createAccount() {
-    try {
-      // 1. Obtener dominios disponibles
-      const domainsRes = await axios.get(`${MAILTM_API}/domains`);
-      const domain = domainsRes.data['hydra:member'][0].domain;
-      
-      // 2. Generar credenciales
-      const username = Math.random().toString(36).substring(2, 10) + Math.floor(Math.random() * 1000);
-      const email = `${username}@${domain}`;
-      const password = Math.random().toString(36).substring(2, 15);
-      
-      // 3. Crear cuenta
-      const accountRes = await axios.post(`${MAILTM_API}/accounts`, {
-        address: email,
-        password: password
-      });
-      
-      // 4. Obtener token de autenticación
-      const tokenRes = await axios.post(`${MAILTM_API}/token`, {
-        address: email,
-        password: password
-      });
-      
-      const accountData = {
-        id: accountRes.data.id,
-        email: email,
-        password: password,
-        token: tokenRes.data.token,
-        createdAt: Date.now()
-      };
-      
-      this.accounts.set(email, accountData);
-      
-      console.log(`✨ Email temporal creado: ${email}`);
-      
-      return accountData;
-    } catch (error) {
-      console.error('Error creando cuenta Mail.tm:', error.response?.data || error.message);
-      throw error;
+    const maxRetries = 3;
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 Intento ${attempt}/${maxRetries} - Creando cuenta en Mail.tm...`);
+        
+        // 1. Obtener dominios disponibles
+        const domainsRes = await axios.get(`${MAILTM_API}/domains`, {
+          timeout: 10000,
+          validateStatus: (status) => status === 200
+        });
+        
+        if (!domainsRes.data || !domainsRes.data['hydra:member'] || domainsRes.data['hydra:member'].length === 0) {
+          throw new Error('No se pudieron obtener dominios de Mail.tm');
+        }
+        
+        const domain = domainsRes.data['hydra:member'][0].domain;
+        console.log(`📧 Usando dominio: ${domain}`);
+        
+        // 2. Generar credenciales
+        const username = Math.random().toString(36).substring(2, 10) + Math.floor(Math.random() * 1000);
+        const email = `${username}@${domain}`;
+        const password = Math.random().toString(36).substring(2, 15);
+        
+        // 3. Crear cuenta
+        const accountRes = await axios.post(`${MAILTM_API}/accounts`, {
+          address: email,
+          password: password
+        }, {
+          timeout: 10000,
+          validateStatus: (status) => status === 201
+        });
+        
+        if (!accountRes.data || !accountRes.data.id) {
+          throw new Error('La API no devolvió un ID de cuenta válido');
+        }
+        
+        // 4. Obtener token de autenticación
+        const tokenRes = await axios.post(`${MAILTM_API}/token`, {
+          address: email,
+          password: password
+        }, {
+          timeout: 10000,
+          validateStatus: (status) => status === 200
+        });
+        
+        if (!tokenRes.data || !tokenRes.data.token) {
+          throw new Error('La API no devolvió un token válido');
+        }
+        
+        const accountData = {
+          id: accountRes.data.id,
+          email: email,
+          password: password,
+          token: tokenRes.data.token,
+          createdAt: Date.now()
+        };
+        
+        this.accounts.set(email, accountData);
+        
+        console.log(`✅ Email temporal creado exitosamente: ${email}`);
+        
+        return accountData;
+        
+      } catch (error) {
+        lastError = error;
+        const errorMsg = error.response?.data?.message || error.message || 'Error desconocido';
+        
+        console.error(`❌ Intento ${attempt}/${maxRetries} falló:`, {
+          message: errorMsg,
+          status: error.response?.status,
+          statusText: error.response?.statusText
+        });
+        
+        // Si es el último intento, lanzar el error
+        if (attempt === maxRetries) {
+          break;
+        }
+        
+        // Esperar antes de reintentar (backoff exponencial)
+        const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        console.log(`⏳ Esperando ${waitTime}ms antes de reintentar...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
+    
+    // Si llegamos aquí, todos los intentos fallaron
+    const errorMessage = lastError?.response?.data?.message || lastError?.message || 'Error al crear cuenta en Mail.tm';
+    console.error('❌ Todos los intentos fallaron. Último error:', errorMessage);
+    throw new Error(`Mail.tm no disponible: ${errorMessage}`);
   }
 
   // Re-autenticar cuenta (cuando el token expira)
